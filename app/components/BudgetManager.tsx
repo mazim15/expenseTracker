@@ -1,21 +1,29 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, deleteDoc, collection } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { TrashIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { User } from 'firebase/auth';
+import { Timestamp } from 'firebase/firestore';
 
 interface Budget {
   category: string;
   amount: number;
 }
 
+interface Expense {
+  category: string;
+  amount: number;
+  date: Timestamp;
+}
+
 interface BudgetManagerProps {
-  user: any;
+  user: User;
   categories: string[];
-  expenses: any[];
+  expenses: Expense[];
 }
 
 export default function BudgetManager({ user, categories, expenses }: BudgetManagerProps) {
@@ -79,13 +87,13 @@ export default function BudgetManager({ user, categories, expenses }: BudgetMana
     toast.success('Budget deleted successfully!');
   };
 
-  const calculateSpentAmount = (category: string) => {
+  const calculateSpentAmount = (category: string): number => {
     const currentDate = new Date();
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     
     return expenses
       .filter(expense => {
-        const expenseDate = expense.date?.toDate();
+        const expenseDate = expense.date.toDate();
         return expense.category === category && 
                expenseDate >= firstDayOfMonth && 
                expenseDate <= currentDate;

@@ -1,19 +1,11 @@
-// ExpenseForm.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { addDoc, collection, serverTimestamp, updateDoc, doc, setDoc, getDoc, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect, useCallback } from 'react';
+import { addDoc, collection, serverTimestamp, updateDoc, doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { PlusIcon, XMarkIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
-
-interface ExpenseFormProps {
-  user: any;
-  expenseToEdit?: any;
-  categories: string[];
-  onCancelEdit?: () => void;
-  setCategories: React.Dispatch<React.SetStateAction<string[]>>;
-}
+import { ExpenseFormProps} from '../types';
 
 export default function ExpenseForm({ 
   user, 
@@ -22,22 +14,18 @@ export default function ExpenseForm({
   onCancelEdit, 
   setCategories 
 }: ExpenseFormProps) {
-  const [amount, setAmount] = useState(expenseToEdit ? expenseToEdit.amount : '');
+  const [amount, setAmount] = useState(expenseToEdit ? expenseToEdit.amount.toString() : '');
   const [description, setDescription] = useState(expenseToEdit ? expenseToEdit.description : '');
   const [category, setCategory] = useState(expenseToEdit ? expenseToEdit.category : 'food');
   const [newCategory, setNewCategory] = useState('');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
-  const [isRecurring, setIsRecurring] = useState(expenseToEdit ? expenseToEdit.isRecurring : false);
-  const [recurringFrequency, setRecurringFrequency] = useState<'weekly' | 'monthly' | 'yearly'>(
-    expenseToEdit ? expenseToEdit.recurringFrequency : 'monthly'
-  );
 
-  const saveCategoriesToDatabase = async (updatedCategories: string[]) => {
+  const saveCategoriesToDatabase = useCallback(async (updatedCategories: string[]) => {
     if (user?.uid) {
       const categoriesDocRef = doc(db, 'users', user.uid, 'userCategories', 'categoriesDoc');
       await setDoc(categoriesDocRef, { categories: updatedCategories });
     }
-  };
+  }, [user?.uid]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -52,26 +40,23 @@ export default function ExpenseForm({
             'utilities', 'insurance', 'medical', 'saving', 'other'
           ];
           setCategories(defaultCategories);
-          saveCategoriesToDatabase(defaultCategories);
+          await saveCategoriesToDatabase(defaultCategories);
         }
       }
     };
-    fetchCategories();
+
+    void fetchCategories();
     
     if (expenseToEdit) {
-      setAmount(expenseToEdit.amount);
+      setAmount(expenseToEdit.amount.toString());
       setDescription(expenseToEdit.description);
       setCategory(expenseToEdit.category);
-      setIsRecurring(expenseToEdit.isRecurring || false);
-      setRecurringFrequency(expenseToEdit.recurringFrequency || 'monthly');
     } else {
       setAmount('');
       setDescription('');
       setCategory('food');
-      setIsRecurring(false);
-      setRecurringFrequency('monthly');
     }
-  }, [user?.uid, expenseToEdit, setCategories]);
+  }, [user?.uid, expenseToEdit, setCategories, saveCategoriesToDatabase]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -87,47 +72,33 @@ export default function ExpenseForm({
         description,
         category,
         date: serverTimestamp(),
-        isRecurring,
-        ...(isRecurring && { recurringFrequency }),
       };
 
-      if (expenseToEdit) {
+      if (expenseToEdit?.id) {
         const expenseDocRef = doc(db, 'users', user.uid, 'expenses', expenseToEdit.id);
         await updateDoc(expenseDocRef, expenseData);
         toast.success('Expense updated successfully!');
         onCancelEdit?.();
       } else {
-        const docRef = await addDoc(collection(db, 'users', user.uid, 'expenses'), expenseData);
-        
-        if (isRecurring) {
-          await addDoc(collection(db, 'users', user.uid, 'recurringExpenses'), {
-            ...expenseData,
-            startDate: new Date(),
-            lastProcessed: new Date(),
-            originalExpenseId: docRef.id
-          });
-        }
-        
+        await addDoc(collection(db, 'users', user.uid, 'expenses'), expenseData);
         toast.success('Expense added successfully!');
       }
 
       if (!expenseToEdit) {
         setAmount('');
         setDescription('');
-        setIsRecurring(false);
-        setRecurringFrequency('monthly');
       }
-    } catch (error) {
+    } catch (err) {
+      console.error('Error processing expense:', err);
       toast.error('Error processing expense');
-      console.error('Error processing expense:', error);
     }
   };
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (newCategory && !categories.includes(newCategory)) {
       const updatedCategories = [...categories, newCategory];
       setCategories(updatedCategories);
-      saveCategoriesToDatabase(updatedCategories);
+      await saveCategoriesToDatabase(updatedCategories);
       setNewCategory('');
       setIsAddingCategory(false);
       toast.success('Category added successfully!');
@@ -203,33 +174,6 @@ export default function ExpenseForm({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="isRecurring"
-              checked={isRecurring}
-              onChange={(e) => setIsRecurring(e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <label htmlFor="isRecurring" className="text-sm font-medium text-gray-700">
-              This is a recurring expense
-            </label>
-          </div>
-
-          {isRecurring && (
-            <select
-              value={recurringFrequency}
-              onChange={(e) => setRecurringFrequency(e.target.value as 'weekly' | 'monthly' | 'yearly')}
-              className="mt-2 block w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-            >
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-            </select>
-          )}
-        </div>
-
         {isAddingCategory && (
           <div className="bg-gray-50 p-4 rounded-lg space-y-4">
             <div className="flex items-center justify-between">
@@ -295,14 +239,14 @@ export default function ExpenseForm({
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const newName = prompt("Enter new category name", cat);
                     if (typeof newName === 'string' && newName.trim() !== "") {
                       const updatedCategories = categories.map((c, i) => 
                         i === index ? newName.trim() : c
                       );
                       setCategories(updatedCategories);
-                      saveCategoriesToDatabase(updatedCategories);
+                      await saveCategoriesToDatabase(updatedCategories);
                       toast.success('Category updated!');
                     }
                   }}
@@ -312,12 +256,12 @@ export default function ExpenseForm({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const confirmDelete = window.confirm(`Delete "${cat}" category?`);
                     if (confirmDelete) {
                       const updatedCategories = categories.filter((_, i) => i !== index);
                       setCategories(updatedCategories);
-                      saveCategoriesToDatabase(updatedCategories);
+                      await saveCategoriesToDatabase(updatedCategories);
                       if (category === cat) {
                         setCategory(updatedCategories[0] || 'food');
                       }

@@ -1,35 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { CameraIcon, XMarkIcon } from '@heroicons/react/24/outline';
+"use client";
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { CameraIcon } from '@heroicons/react/24/outline';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, getDocs } from 'firebase/firestore';
 import { db, storage } from '../lib/firebase';
 import toast from 'react-hot-toast';
-
-interface ReceiptUploadProps {
-  user: any;
-  expenseId?: string;
-}
+import Image from 'next/image';
+import { ReceiptUploadProps, Receipt } from '../types';
 
 export default function ReceiptUpload({ user, expenseId }: ReceiptUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [receipts, setReceipts] = useState<string[]>([]);
 
+  const loadReceipts = useCallback(async () => {
+    if (!expenseId) return;
+    try {
+      const receiptsRef = collection(db, 'users', user.uid, 'expenses', expenseId, 'receipts');
+      const snapshot = await getDocs(receiptsRef);
+      const urls = await Promise.all(
+        snapshot.docs.map((doc) => {
+          return getDownloadURL(ref(storage, doc.data().path));
+        })
+      );
+      setReceipts(urls);
+    } catch (err) {
+      console.error('Error loading receipts:', err);
+      toast.error('Error loading receipts');
+    }
+  }, [user.uid, expenseId]);
+
   useEffect(() => {
     if (!user || !expenseId) return;
-    loadReceipts();
-  }, [user, expenseId]);
-
-  const loadReceipts = async () => {
-    if (!expenseId) return;
-    const receiptsRef = collection(db, 'users', user.uid, 'expenses', expenseId, 'receipts');
-    const snapshot = await getDocs(receiptsRef);
-    const urls = await Promise.all(
-      snapshot.docs.map((doc) => {
-        return getDownloadURL(ref(storage, doc.data().path));
-      })
-    );
-    setReceipts(urls);
-  };
+    void loadReceipts();
+  }, [user, expenseId, loadReceipts]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -44,15 +48,21 @@ export default function ReceiptUpload({ user, expenseId }: ReceiptUploadProps) {
       await uploadBytes(storageRef, file);
       
       if (expenseId) {
-        await addDoc(collection(db, 'users', user.uid, 'expenses', expenseId, 'receipts'), {
+        const receipt: Receipt = {
           path,
           uploadedAt: new Date()
-        });
+        };
+        
+        await addDoc(
+          collection(db, 'users', user.uid, 'expenses', expenseId, 'receipts'), 
+          receipt
+        );
       }
       
       toast.success('Receipt uploaded successfully!');
-      loadReceipts();
-    } catch (error) {
+      await loadReceipts();
+    } catch (err) {
+      console.error('Error uploading receipt:', err);
       toast.error('Error uploading receipt');
     } finally {
       setUploading(false);
@@ -78,11 +88,13 @@ export default function ReceiptUpload({ user, expenseId }: ReceiptUploadProps) {
 
       {receipts.length > 0 && (
         <div className="grid grid-cols-2 gap-4">
-          {receipts.map((url, index) => (
-            <div key={index} className="relative rounded-lg overflow-hidden">
-              <img
+          {receipts.map((url, idx) => (
+            <div key={idx} className="relative rounded-lg overflow-hidden">
+              <Image
                 src={url}
-                alt={`Receipt ${index + 1}`}
+                alt={`Receipt ${idx + 1}`}
+                width={400}
+                height={192}
                 className="w-full h-48 object-cover"
               />
             </div>

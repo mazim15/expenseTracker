@@ -1,36 +1,21 @@
-// ExpenseList.tsx
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db, storage } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { TrashIcon, PencilSquareIcon, ChartBarIcon, CalendarIcon, MagnifyingGlassIcon, DocumentIcon } from '@heroicons/react/24/outline';
+import { 
+  TrashIcon, 
+  PencilSquareIcon, 
+  ChartBarIcon, 
+  CalendarIcon, 
+  MagnifyingGlassIcon, 
+  DocumentIcon 
+} from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { Expense, ExpenseListProps, FilterButtonProps } from '../types';
 
-interface Expense {
-  id: string;
-  amount: number;
-  description: string;
-  category: string;
-  date: any;
-  receiptUrl?: string;
-  receiptFileName?: string;
-  isRecurring?: boolean;
-  recurringFrequency?: 'weekly' | 'monthly' | 'yearly';
-}
-
-interface User {
-  uid: string;
-}
-
-interface ExpenseListProps {
-  user: User | null;
-  categories: string[];
-  setExpenseToEdit: React.Dispatch<React.SetStateAction<Expense | null>>;
-}
-
-export default function ExpenseList({ user, categories, setExpenseToEdit }: ExpenseListProps) {
+export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filter, setFilter] = useState<'all' | 'today' | 'this-month' | 'yearly' | 'custom'>('all');
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
@@ -61,7 +46,7 @@ export default function ExpenseList({ user, categories, setExpenseToEdit }: Expe
           date: data.date,
           receiptUrl: data.receiptUrl,
           receiptFileName: data.receiptFileName,
-          isRecurring: data.isRecurring,
+          isRecurring: data.isRecurring || false,
           recurringFrequency: data.recurringFrequency,
         });
       });
@@ -176,7 +161,7 @@ export default function ExpenseList({ user, categories, setExpenseToEdit }: Expe
         });
       }
 
-      toast.success('Expense and receipt deleted successfully');
+      toast.success('Expense deleted successfully');
     } catch (error) {
       console.error('Error deleting expense:', error);
       toast.error('Error deleting expense');
@@ -192,7 +177,7 @@ export default function ExpenseList({ user, categories, setExpenseToEdit }: Expe
       )
     : filteredExpenses;
 
-  const FilterButton = ({ label, value, icon: Icon }: { label: string; value: typeof filter; icon: React.ComponentType<any> }) => (
+  const FilterButton = ({ label, value, icon: Icon }: FilterButtonProps) => (
     <button
       className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
         filter === value 
@@ -252,7 +237,7 @@ export default function ExpenseList({ user, categories, setExpenseToEdit }: Expe
               </span>
             )}
             <span className="text-gray-400 text-sm">
-              {expense.date?.toDate()?.toLocaleDateString('en-US', {
+              {expense.date.toDate().toLocaleDateString('en-US', {
                 day: 'numeric',
                 month: 'short',
                 year: 'numeric'
@@ -324,7 +309,7 @@ export default function ExpenseList({ user, categories, setExpenseToEdit }: Expe
         {filter === 'custom' && (
           <div className="grid grid-cols-2 gap-4 mt-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
               <input
                 type="date"
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
@@ -363,6 +348,28 @@ export default function ExpenseList({ user, categories, setExpenseToEdit }: Expe
           </ul>
         )}
       </div>
+
+      {filter === 'custom' && !startDate && !endDate && (
+        <div className="text-center py-4 px-6 bg-yellow-50 text-yellow-700">
+          <p>Please select both start and end dates to filter expenses</p>
+        </div>
+      )}
+
+      {searchedExpenses.length > 0 && (
+        <div className="p-6 bg-gray-50 border-t">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600">
+              Showing {searchedExpenses.length} of {expenses.length} expenses
+            </span>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">Filtered Total</p>
+              <p className="text-xl font-bold text-gray-900">
+                PKR {total.toFixed(2)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
