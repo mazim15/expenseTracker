@@ -121,7 +121,7 @@ export default function Page() {
               <ExpenseList
                 user={user}
                 categories={categories}
-                setExpenseToEdit={setExpenseToEdit}
+                setExpenseToEdit={(expense) => setExpenseToEdit(expense)}
               />
             </div>
           </div>

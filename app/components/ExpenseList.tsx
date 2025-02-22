@@ -12,8 +12,46 @@ import {
   MagnifyingGlassIcon, 
   DocumentIcon 
 } from '@heroicons/react/24/outline';
+import { Expense, DateInput } from '../types';
 import toast from 'react-hot-toast';
-import { Expense, ExpenseListProps, FilterButtonProps } from '../types';
+import { User } from 'firebase/auth';
+
+interface ExpenseListProps {
+  user: User | null;
+  categories: string[];
+  setExpenseToEdit: (expense: Expense | null) => void;
+}
+
+interface FilterButtonProps {
+  label: string;
+  value: 'all' | 'today' | 'this-month' | 'yearly' | 'custom';
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const formatExpenseDate = (date: DateInput): string => {
+  if (!date) return 'No date';
+
+  try {
+    return date.toDate().toLocaleDateString('en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid date';
+  }
+};
+
+const getDateFromTimestamp = (timestamp: DateInput): Date | null => {
+  if (!timestamp) return null;
+  try {
+    return timestamp.toDate();
+  } catch (error) {
+    console.error('Error converting timestamp to date:', error);
+    return null;
+  }
+};
 
 export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -40,17 +78,21 @@ export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps
         const data = doc.data();
         expensesData.push({
           id: doc.id,
-          amount: data.amount,
-          description: data.description,
-          category: data.category,
+          amount: data.amount || 0,
+          description: data.description || '',
+          category: data.category || 'Uncategorized',
           date: data.date,
-          receiptUrl: data.receiptUrl,
-          receiptFileName: data.receiptFileName,
+          receiptUrl: data.receiptUrl || null,
+          receiptFileName: data.receiptFileName || null,
           isRecurring: data.isRecurring || false,
-          recurringFrequency: data.recurringFrequency,
+          recurringFrequency: data.recurringFrequency || null,
         });
       });
       setExpenses(expensesData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error('Error fetching expenses:', error);
+      toast.error('Failed to fetch expenses');
       setIsLoading(false);
     });
 
@@ -61,40 +103,44 @@ export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps
     const filterExpenses = () => {
       let filtered = [...expenses];
       const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
       switch (filter) {
         case 'today': {
           const startOfDay = new Date(today);
-          startOfDay.setHours(0, 0, 0, 0);
           const endOfDay = new Date(today);
           endOfDay.setHours(23, 59, 59, 999);
           filtered = expenses.filter(expense => {
-            const expenseDate = expense.date.toDate();
-            return expenseDate >= startOfDay && expenseDate <= endOfDay;
+            const expenseDate = getDateFromTimestamp(expense.date);
+            return expenseDate && expenseDate >= startOfDay && expenseDate <= endOfDay;
           });
           break;
         }
         case 'this-month': {
           const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-          const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
           filtered = expenses.filter(expense => {
-            const expenseDate = expense.date.toDate();
-            return expenseDate >= startOfMonth && expenseDate <= endOfMonth;
+            const expenseDate = getDateFromTimestamp(expense.date);
+            return expenseDate && expenseDate >= startOfMonth && expenseDate <= endOfMonth;
           });
           break;
         }
         case 'yearly': {
+          const startOfYear = new Date(today.getFullYear(), 0, 1);
+          const endOfYear = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
           filtered = expenses.filter(expense => {
-            const expenseDate = expense.date.toDate();
-            return expenseDate.getFullYear() === today.getFullYear();
+            const expenseDate = getDateFromTimestamp(expense.date);
+            return expenseDate && expenseDate >= startOfYear && expenseDate <= endOfYear;
           });
           break;
         }
         case 'custom': {
           if (startDate && endDate) {
+            const endDateTime = new Date(endDate);
+            endDateTime.setHours(23, 59, 59, 999);
             filtered = expenses.filter(expense => {
-              const expenseDate = expense.date.toDate();
-              return expenseDate >= startDate && expenseDate <= endDate;
+              const expenseDate = getDateFromTimestamp(expense.date);
+              return expenseDate && expenseDate >= startDate && expenseDate <= endDateTime;
             });
           }
           break;
@@ -136,7 +182,6 @@ export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps
     }
 
     try {
-      // Delete receipt if it exists
       if (expense.receiptUrl && expense.receiptFileName) {
         const receiptRef = ref(storage, `receipts/${user.uid}/${expense.id}/${expense.receiptFileName}`);
         try {
@@ -146,10 +191,8 @@ export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps
         }
       }
 
-      // Delete expense document
       await deleteDoc(doc(db, 'users', user.uid, 'expenses', expense.id));
       
-      // If it's a recurring expense, delete from recurringExpenses collection
       if (expense.isRecurring) {
         const recurringQuery = query(
           collection(db, 'users', user.uid, 'recurringExpenses'),
@@ -168,7 +211,7 @@ export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps
     }
   };
 
-  const total = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const total = filteredExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
   
   const searchedExpenses = searchTerm
     ? filteredExpenses.filter(expense =>
@@ -197,7 +240,7 @@ export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps
         <div className="flex-1">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xl font-bold text-gray-800">
-              PKR {expense.amount.toFixed(2)}
+              PKR {(expense.amount || 0).toFixed(2)}
             </h4>
             <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <label className="cursor-pointer p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors">
@@ -226,22 +269,18 @@ export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps
               </button>
             </div>
           </div>
-          <p className="text-gray-600">{expense.description}</p>
+          <p className="text-gray-600">{expense.description || 'No description'}</p>
           <div className="mt-2 flex items-center gap-2 flex-wrap">
             <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">
-              {expense.category}
+              {expense.category || 'Uncategorized'}
             </span>
             {expense.isRecurring && (
               <span className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm font-medium">
-                {expense.recurringFrequency} recurring
+                {expense.recurringFrequency || 'Recurring'} recurring
               </span>
             )}
             <span className="text-gray-400 text-sm">
-              {expense.date.toDate().toLocaleDateString('en-US', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric'
-              })}
+              {formatExpenseDate(expense.date)}
             </span>
             {expense.receiptUrl && (
               <a
@@ -309,7 +348,7 @@ export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps
         {filter === 'custom' && (
           <div className="grid grid-cols-2 gap-4 mt-4">
             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
               <input
                 type="date"
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
