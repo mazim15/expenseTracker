@@ -22,7 +22,7 @@ export interface BudgetData {
   category: string;
   limit: number;
   spent?: number;
-  period: 'monthly' | 'yearly';
+  period?: 'monthly' | 'yearly'; // Make period optional
   notifications?: boolean;
   remaining?: number;
   percentage?: number;

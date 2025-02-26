@@ -68,12 +68,13 @@ export default function BudgetSection({ user, expenses }: BudgetSectionProps) {
           limit,
           spent,
           remaining,
-          percentage
+          percentage,
+          period: 'monthly'
         });
       });
       
       // Sort by percentage used (descending)
-      data.sort((a, b) => b.percentage - a.percentage);
+      data.sort((a, b) => (b.percentage || 0) - (a.percentage || 0));
       
       setBudgetData(data);
     };
@@ -193,7 +194,7 @@ export default function BudgetSection({ user, expenses }: BudgetSectionProps) {
                   <div>
                     <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 capitalize">{budget.category}</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      PKR {budget.spent.toFixed(2)} of PKR {budget.limit.toFixed(2)}
+                      PKR {(budget.spent || 0).toFixed(2)} of PKR {(budget.limit || 0).toFixed(2)}
                     </p>
                   </div>
                   <button
@@ -207,22 +208,22 @@ export default function BudgetSection({ user, expenses }: BudgetSectionProps) {
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                   <div 
                     className={`h-2.5 rounded-full ${
-                      budget.percentage >= 100 
+                      (budget.percentage || 0) >= 100 
                         ? 'bg-red-600' 
-                        : budget.percentage >= 75 
+                        : (budget.percentage || 0) >= 75 
                           ? 'bg-yellow-500' 
                           : 'bg-green-500'
                     }`}
-                    style={{ width: `${Math.min(100, budget.percentage)}%` }}
+                    style={{ width: `${Math.min(100, budget.percentage || 0)}%` }}
                   ></div>
                 </div>
                 
                 <p className="text-sm text-right">
-                  {budget.percentage >= 100 ? (
+                  {(budget.percentage || 0) >= 100 ? (
                     <span className="text-red-600 dark:text-red-400">Over budget!</span>
                   ) : (
                     <span className="text-green-600 dark:text-green-400">
-                      PKR {budget.remaining.toFixed(2)} remaining
+                      PKR {(budget.remaining || 0).toFixed(2)} remaining
                     </span>
                   )}
                 </p>
