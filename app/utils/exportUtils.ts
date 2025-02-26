@@ -1,22 +1,16 @@
 "use client";
 
 import { Timestamp } from 'firebase/firestore';
+import { Expense } from '../types';
 
-interface Expense {
-  date: Timestamp;
-  amount: number;
-  description: string;
-  category: string;
-}
-
-export const exportToCSV = (expenses: Expense[]): void => {
+export const exportToCSV = async (expenses: Expense[]): Promise<void> => {
   const headers = ['Date', 'Amount', 'Description', 'Category'];
   const csvContent = [
     headers.join(','),
     ...expenses.map(expense => [
       expense.date.toDate().toLocaleDateString(),
       expense.amount,
-      `"${expense.description.replace(/"/g, '""')}"`,
+      `"${expense.description?.replace(/"/g, '""')}"`,
       expense.category
     ].join(','))
   ].join('\n');

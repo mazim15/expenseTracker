@@ -11,7 +11,7 @@ import { Timestamp } from 'firebase/firestore';
 export default function ExpenseForm({ 
   user, 
   expenseToEdit, 
-  categories, 
+  categories = [],
   onCancelEdit, 
   setCategories 
 }: ExpenseFormProps) {
@@ -46,7 +46,8 @@ export default function ExpenseForm({
 
   useEffect(() => {
     const fetchCategories = async () => {
-      if (user?.uid) {
+      if (!user?.uid || !setCategories) return;
+      
         const categoriesDocRef = doc(db, 'users', user.uid, 'userCategories', 'categoriesDoc');
         const docSnap = await getDoc(categoriesDocRef);
         if (docSnap.exists()) {
@@ -58,7 +59,6 @@ export default function ExpenseForm({
           ];
           setCategories(defaultCategories);
           await saveCategoriesToDatabase(defaultCategories);
-        }
       }
     };
 

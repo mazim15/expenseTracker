@@ -8,7 +8,7 @@ import { Expense, TabType, BudgetData } from '../types';
 import Navbar from './Navbar';
 import ExpenseForm from './ExpenseForm';
 import ExpenseList from './ExpenseList';
-import AnalyticsSection from './AnalyticsSection';
+import AnalyticsDashboard from './AnalyticsDashboard';
 import BudgetSection from './BudgetSection';
 import ReportsSection from './ReportsSection';
 import SettingsSection from './SettingsSection';
@@ -16,6 +16,7 @@ import DashboardSummary from './DashboardSummary';
 import Notifications from './Notifications';
 import Footer from './Footer';
 import toast from 'react-hot-toast';
+import { Timestamp } from 'firebase/firestore';
 
 interface DashboardProps {
   user: User;
@@ -24,7 +25,7 @@ interface DashboardProps {
 export default function Dashboard({ user }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>('expenses');
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
+  const [expenseToEdit, setExpenseToEdit] = useState<Expense | undefined>(undefined);
   const [categories, setCategories] = useState<string[]>(['Food', 'Housing', 'Transportation', 'Utilities', 'Entertainment', 'Healthcare', 'Shopping', 'Other']);
   const [budgetData, setBudgetData] = useState<BudgetData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,7 +44,8 @@ export default function Dashboard({ user }: DashboardProps) {
       querySnapshot.forEach((doc) => {
         expensesData.push({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
+          date: doc.data().date instanceof Timestamp ? doc.data().date : Timestamp.fromDate(doc.data().date.toDate())
         } as Expense);
       });
       setExpenses(expensesData);
@@ -67,7 +69,7 @@ export default function Dashboard({ user }: DashboardProps) {
               user={user} 
               expenseToEdit={expenseToEdit} 
               categories={categories} 
-              onCancelEdit={() => setExpenseToEdit(null)} 
+              onCancelEdit={() => setExpenseToEdit(undefined)} 
               setCategories={setCategories}
             />
             <ExpenseList 
@@ -77,7 +79,7 @@ export default function Dashboard({ user }: DashboardProps) {
           </div>
         );
       case 'analytics':
-        return <AnalyticsSection expenses={expenses} />;
+        return <AnalyticsDashboard expenses={expenses} />;
       case 'budget':
         return <BudgetSection user={user} expenses={expenses} />;
       case 'reports':

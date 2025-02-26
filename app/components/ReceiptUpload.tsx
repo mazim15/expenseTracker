@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CameraIcon } from '@heroicons/react/24/outline';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, getDocs, Timestamp } from 'firebase/firestore';
 import { db, storage } from '../lib/firebase';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
@@ -50,7 +50,7 @@ export default function ReceiptUpload({ user, expenseId }: ReceiptUploadProps) {
       if (expenseId) {
         const receipt: Receipt = {
           path,
-          uploadedAt: new Date()
+          uploadedAt: Timestamp.fromDate(new Date())
         };
         
         await addDoc(

@@ -32,7 +32,7 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<TabType>('expenses');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
+  const [expenseToEdit, setExpenseToEdit] = useState<Expense | undefined>(undefined);
   const [darkMode, setDarkMode] = useState<boolean>(false);
 
   useEffect(() => {
@@ -193,7 +193,7 @@ export default function Page() {
                 categories={categories}
                 setCategories={setCategories}
                 expenseToEdit={expenseToEdit}
-                onCancelEdit={() => setExpenseToEdit(null)}
+                onCancelEdit={() => setExpenseToEdit(undefined)}
               />
             </div>
             <div>

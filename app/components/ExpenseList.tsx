@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, deleteDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { 
   MagnifyingGlassIcon, 
@@ -353,7 +353,13 @@ export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps
                     
                     <div className="mt-2 flex space-x-2 justify-end">
                       <button
-                        onClick={() => setExpenseToEdit(expense)}
+                        onClick={() => {
+                          const expenseWithTimestamp = {
+                            ...expense,
+                            date: expense.date instanceof Timestamp ? expense.date : Timestamp.fromDate(expense.date.toDate())
+                          };
+                          setExpenseToEdit(expenseWithTimestamp);
+                        }}
                         className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                       >
                         <PencilIcon className="w-4 h-4" />

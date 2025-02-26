@@ -13,22 +13,24 @@ export default function Notifications({ expenses, budgetData = [] }: Notificatio
   const [notifications, setNotifications] = useState<{ id: string; message: string; type: 'info' | 'warning' | 'success' | 'error' }[]>([]);
 
   useEffect(() => {
-    const newNotifications = [];
+    const newNotifications: { id: string; message: string; type: 'info' | 'warning' | 'success' | 'error' }[] = [];
     
     // Check for budget warnings
     budgetData.forEach(budget => {
-      if (budget.percentage >= 90 && budget.percentage < 100) {
-        newNotifications.push({
-          id: `budget-warning-${budget.category}`,
-          message: `You've used ${budget.percentage.toFixed(0)}% of your ${budget.category} budget.`,
-          type: 'warning'
-        });
-      } else if (budget.percentage >= 100) {
-        newNotifications.push({
-          id: `budget-exceeded-${budget.category}`,
-          message: `You've exceeded your ${budget.category} budget by PKR ${(budget.spent - budget.limit).toFixed(2)}.`,
-          type: 'error'
-        });
+      if (budget.percentage !== undefined) {
+        if (budget.percentage >= 90 && budget.percentage < 100) {
+          newNotifications.push({
+            id: `budget-warning-${budget.category}`,
+            message: `You've used ${budget.percentage.toFixed(0)}% of your ${budget.category} budget.`,
+            type: 'warning' as const
+          });
+        } else if (budget.percentage >= 100) {
+          newNotifications.push({
+            id: `budget-exceeded-${budget.category}`,
+            message: `You've exceeded your ${budget.category} budget by PKR ${(budget.spent! - budget.limit).toFixed(2)}.`,
+            type: 'error' as const
+          });
+        }
       }
     });
     
