@@ -1,18 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { GeistSans } from 'geist/font/sans'
+import { GeistMono } from 'geist/font/mono'
 import "./globals.css";
 import { AuthProvider } from './context/AuthContext';
 import DarkModeScript from './components/DarkModeScript';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// Initialize the fonts
+const sans = GeistSans
+const mono = GeistMono
 
 export const metadata: Metadata = {
   title: "Expense Tracker",
@@ -29,7 +24,7 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" sizes="any" />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body className={`${sans.variable} ${mono.variable}`}>
         <AuthProvider>
           <DarkModeScript />
           {children}
