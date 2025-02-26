@@ -1,10 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // your existing config options here
+  images: {
+    domains: ['lh3.googleusercontent.com'],
+  },
   webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "undici": false,
+    };
     config.resolve.fallback = {
       ...config.resolve.fallback,
-      "undici": false,
+      "fs": false,
+      "net": false,
+      "tls": false,
+      "crypto": false,
     };
     return config;
   },
