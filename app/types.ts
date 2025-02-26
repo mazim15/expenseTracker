@@ -16,4 +16,12 @@ export interface User {
   uid: string;
   email: string | null;
   displayName?: string | null;
+}
+
+export interface BudgetData {
+  category: string;
+  limit: number;
+  spent?: number;
+  period: 'monthly' | 'yearly';
+  notifications?: boolean;
 } 
