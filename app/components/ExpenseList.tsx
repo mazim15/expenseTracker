@@ -1,41 +1,35 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc, updateDoc, getDocs } from 'firebase/firestore';
-import { db, storage } from '../lib/firebase';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import React, { useState, useEffect, useMemo } from 'react';
+import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { 
-  TrashIcon, 
-  PencilSquareIcon, 
-  ChartBarIcon, 
-  CalendarIcon, 
   MagnifyingGlassIcon, 
-  DocumentIcon 
+  FunnelIcon, 
+  CalendarIcon, 
+  ClockIcon, 
+  HashtagIcon, 
+  PencilIcon, 
+  TrashIcon,
+  MapPinIcon,
+  TagIcon,
+  CreditCardIcon
 } from '@heroicons/react/24/outline';
-import { Expense, DateInput } from '../types';
+import { ExpenseListProps } from '../types';
 import toast from 'react-hot-toast';
-import { User } from 'firebase/auth';
 
-interface ExpenseListProps {
-  user: User | null;
-  categories: string[];
-  setExpenseToEdit: (expense: Expense | null) => void;
-}
-
-interface FilterButtonProps {
-  label: string;
-  value: 'all' | 'today' | 'this-month' | 'yearly' | 'custom';
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-const formatExpenseDate = (date: DateInput): string => {
-  if (!date) return 'No date';
-
+// Add this utility function to format dates
+const formatExpenseDate = (timestamp: any): string => {
+  if (!timestamp) return '';
+  
   try {
-    return date.toDate().toLocaleDateString('en-US', {
-      day: 'numeric',
-      month: 'short',
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   } catch (error) {
     console.error('Error formatting date:', error);
@@ -43,30 +37,32 @@ const formatExpenseDate = (date: DateInput): string => {
   }
 };
 
-const getDateFromTimestamp = (timestamp: DateInput): Date | null => {
-  if (!timestamp) return null;
-  try {
-    return timestamp.toDate();
-  } catch (error) {
-    console.error('Error converting timestamp to date:', error);
-    return null;
-  }
-};
+// Define the Expense type locally if it's not exported from '../types'
+interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  date: {
+    toDate: () => Date;
+  };
+  category: string;
+  tags?: string[];
+  location?: string;
+  paymentMethod?: string;
+}
 
 export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [filter, setFilter] = useState<'all' | 'today' | 'this-month' | 'yearly' | 'custom'>('all');
-  const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'today' | 'this-month' | 'this-year' | 'custom'>('all');
+  const [customDateStart, setCustomDateStart] = useState<string>('');
+  const [customDateEnd, setCustomDateEnd] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     if (!user) return;
 
-    setIsLoading(true);
     const q = query(
       collection(db, 'users', user.uid, 'expenses'),
       orderBy('date', 'desc')
@@ -75,340 +71,311 @@ export default function ExpenseList({ user, setExpenseToEdit }: ExpenseListProps
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const expensesData: Expense[] = [];
       querySnapshot.forEach((doc) => {
-        const data = doc.data();
         expensesData.push({
           id: doc.id,
-          amount: data.amount || 0,
-          description: data.description || '',
-          category: data.category || 'Uncategorized',
-          date: data.date,
-          receiptUrl: data.receiptUrl || null,
-          receiptFileName: data.receiptFileName || null,
-          isRecurring: data.isRecurring || false,
-          recurringFrequency: data.recurringFrequency || null,
-        });
+          ...doc.data()
+        } as Expense);
       });
       setExpenses(expensesData);
-      setIsLoading(false);
-    }, (error) => {
-      console.error('Error fetching expenses:', error);
-      toast.error('Failed to fetch expenses');
-      setIsLoading(false);
     });
 
     return () => unsubscribe();
   }, [user]);
 
-  useEffect(() => {
-    const filterExpenses = () => {
-      let filtered = [...expenses];
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      switch (filter) {
-        case 'today': {
-          const startOfDay = new Date(today);
-          const endOfDay = new Date(today);
-          endOfDay.setHours(23, 59, 59, 999);
-          filtered = expenses.filter(expense => {
-            const expenseDate = getDateFromTimestamp(expense.date);
-            return expenseDate && expenseDate >= startOfDay && expenseDate <= endOfDay;
-          });
-          break;
-        }
-        case 'this-month': {
-          const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-          const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-          filtered = expenses.filter(expense => {
-            const expenseDate = getDateFromTimestamp(expense.date);
-            return expenseDate && expenseDate >= startOfMonth && expenseDate <= endOfMonth;
-          });
-          break;
-        }
-        case 'yearly': {
-          const startOfYear = new Date(today.getFullYear(), 0, 1);
-          const endOfYear = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
-          filtered = expenses.filter(expense => {
-            const expenseDate = getDateFromTimestamp(expense.date);
-            return expenseDate && expenseDate >= startOfYear && expenseDate <= endOfYear;
-          });
-          break;
-        }
-        case 'custom': {
-          if (startDate && endDate) {
-            const endDateTime = new Date(endDate);
-            endDateTime.setHours(23, 59, 59, 999);
-            filtered = expenses.filter(expense => {
-              const expenseDate = getDateFromTimestamp(expense.date);
-              return expenseDate && expenseDate >= startDate && expenseDate <= endDateTime;
-            });
-          }
-          break;
-        }
+  const handleDeleteExpense = async (id: string) => {
+    if (!user) return;
+    
+    if (confirm('Are you sure you want to delete this expense?')) {
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'expenses', id));
+        toast.success('Expense deleted successfully');
+      } catch (error) {
+        console.error('Error deleting expense:', error);
+        toast.error('Failed to delete expense');
       }
-      setFilteredExpenses(filtered);
-    };
-
-    filterExpenses();
-  }, [expenses, filter, startDate, endDate]);
-
-  const handleReceiptUpload = async (expenseId: string, file: File) => {
-    if (!user || !file) return;
-
-    try {
-      setUploadingReceipt(expenseId);
-      const storageRef = ref(storage, `receipts/${user.uid}/${expenseId}/${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(storageRef);
-
-      await updateDoc(doc(db, 'users', user.uid, 'expenses', expenseId), {
-        receiptUrl: downloadUrl,
-        receiptFileName: file.name
-      });
-
-      toast.success('Receipt uploaded successfully');
-    } catch (error) {
-      console.error('Error uploading receipt:', error);
-      toast.error('Failed to upload receipt');
-    } finally {
-      setUploadingReceipt(null);
     }
   };
 
-  const deleteExpense = async (expense: Expense) => {
-    if (!user) {
-      toast.error('User not logged in');
-      return;
+  const filteredExpenses = useMemo(() => {
+    let result = [...expenses];
+
+    // Apply search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      result = result.filter(
+        (expense) =>
+          expense.description.toLowerCase().includes(searchLower) ||
+          expense.category.toLowerCase().includes(searchLower) ||
+          expense.amount.toString().includes(searchLower) ||
+          (expense.tags && expense.tags.some((tag: string) => tag.toLowerCase().includes(searchLower))) ||
+          (expense.location && expense.location.toLowerCase().includes(searchLower)) ||
+          (expense.paymentMethod && expense.paymentMethod.toLowerCase().includes(searchLower))
+      );
     }
 
-    try {
-      if (expense.receiptUrl && expense.receiptFileName) {
-        const receiptRef = ref(storage, `receipts/${user.uid}/${expense.id}/${expense.receiptFileName}`);
-        try {
-          await deleteObject(receiptRef);
-        } catch (error) {
-          console.error('Error deleting receipt:', error);
-        }
-      }
+    // Apply date filter
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
 
-      await deleteDoc(doc(db, 'users', user.uid, 'expenses', expense.id));
-      
-      if (expense.isRecurring) {
-        const recurringQuery = query(
-          collection(db, 'users', user.uid, 'recurringExpenses'),
-          where('originalExpenseId', '==', expense.id)
-        );
-        const snapshot = await getDocs(recurringQuery);
-        snapshot.forEach(async (doc) => {
-          await deleteDoc(doc.ref);
+    switch (activeFilter) {
+      case 'today':
+        result = result.filter((expense) => {
+          const expenseDate = expense.date.toDate();
+          return expenseDate >= today;
         });
-      }
-
-      toast.success('Expense deleted successfully');
-    } catch (error) {
-      console.error('Error deleting expense:', error);
-      toast.error('Error deleting expense');
+        break;
+      case 'this-month':
+        result = result.filter((expense) => {
+          const expenseDate = expense.date.toDate();
+          return expenseDate >= startOfMonth;
+        });
+        break;
+      case 'this-year':
+        result = result.filter((expense) => {
+          const expenseDate = expense.date.toDate();
+          return expenseDate >= startOfYear;
+        });
+        break;
+      case 'custom':
+        if (customDateStart && customDateEnd) {
+          const startDate = new Date(customDateStart);
+          const endDate = new Date(customDateEnd);
+          endDate.setHours(23, 59, 59, 999); // End of the day
+          
+          result = result.filter((expense) => {
+            const expenseDate = expense.date.toDate();
+            return expenseDate >= startDate && expenseDate <= endDate;
+          });
+        }
+        break;
     }
-  };
 
-  const total = filteredExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
-  
-  const searchedExpenses = searchTerm
-    ? filteredExpenses.filter(expense =>
-        expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        expense.category.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : filteredExpenses;
+    // Apply sorting
+    result.sort((a, b) => {
+      if (sortBy === 'date') {
+        const dateA = a.date.toDate().getTime();
+        const dateB = b.date.toDate().getTime();
+        return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+      } else if (sortBy === 'amount') {
+        return sortOrder === 'asc' ? a.amount - b.amount : b.amount - a.amount;
+      }
+      return 0;
+    });
 
-  const FilterButton = ({ label, value, icon: Icon }: FilterButtonProps) => (
-    <button
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-        filter === value 
-          ? 'bg-indigo-100 text-indigo-700 shadow-sm' 
-          : 'bg-white text-gray-600 hover:bg-gray-50'
-      }`}
-      onClick={() => setFilter(value)}
-    >
-      <Icon className="w-4 h-4" />
-      <span>{label}</span>
-    </button>
-  );
+    return result;
+  }, [expenses, searchTerm, activeFilter, customDateStart, customDateEnd, sortBy, sortOrder]);
 
-  const ExpenseListItem = ({ expense }: { expense: Expense }) => (
-    <li className="group p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 animate-fadeIn">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xl font-bold text-gray-800">
-              PKR {(expense.amount || 0).toFixed(2)}
-            </h4>
-            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <label className="cursor-pointer p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors">
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleReceiptUpload(expense.id, file);
-                  }}
-                />
-                <DocumentIcon className="h-5 w-5" />
-              </label>
-              <button
-                onClick={() => setExpenseToEdit(expense)}
-                className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
-              >
-                <PencilSquareIcon className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => deleteExpense(expense)}
-                className="p-2 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
-              >
-                <TrashIcon className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-          <p className="text-gray-600">{expense.description || 'No description'}</p>
-          <div className="mt-2 flex items-center gap-2 flex-wrap">
-            <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">
-              {expense.category || 'Uncategorized'}
-            </span>
-            {expense.isRecurring && (
-              <span className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm font-medium">
-                {expense.recurringFrequency || 'Recurring'} recurring
-              </span>
-            )}
-            <span className="text-gray-400 text-sm">
-              {formatExpenseDate(expense.date)}
-            </span>
-            {expense.receiptUrl && (
-              <a
-                href={expense.receiptUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
-              >
-                <DocumentIcon className="h-4 w-4" />
-                View Receipt
-              </a>
-            )}
-            {uploadingReceipt === expense.id && (
-              <span className="text-gray-500 text-sm">Uploading receipt...</span>
-            )}
-          </div>
-        </div>
-      </div>
-    </li>
-  );
+  const totalAmount = useMemo(() => {
+    return filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  }, [filteredExpenses]);
 
   return (
-    <div className="bg-white rounded-xl shadow-xl overflow-hidden transition-all duration-300">
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-3xl font-bold">Expenses Dashboard</h2>
-          <div className="text-right">
-            <p className="text-xl opacity-90">Total Expenses</p>
-            <p className="text-4xl font-bold">PKR {total.toFixed(2)}</p>
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+      <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Your Expenses</h2>
+        
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="relative flex-grow">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
+                <input
+              type="text"
+              placeholder="Search expenses..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          
+          <div className="flex items-center">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'date' | 'amount')}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-l-lg dark:bg-gray-700 dark:text-white"
+            >
+              <option value="date">Date</option>
+              <option value="amount">Amount</option>
+            </select>
+            <button
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              className="p-2 bg-gray-100 dark:bg-gray-700 rounded-r-lg border-y border-r border-gray-300 dark:border-gray-600"
+            >
+              {sortOrder === 'asc' ? '↑' : '↓'}
+            </button>
           </div>
         </div>
 
-        <div className="relative">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search expenses..."
-            className="w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-md rounded-lg text-white placeholder-white/60 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="p-6 border-b">
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          <FilterButton label="All" value="all" icon={ChartBarIcon} />
-          <FilterButton label="Today" value="today" icon={CalendarIcon} />
-          <FilterButton label="This Month" value="this-month" icon={CalendarIcon} />
-          <FilterButton label="Yearly" value="yearly" icon={CalendarIcon} />
-          <FilterButton label="Custom" value="custom" icon={CalendarIcon} />
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={() => setActiveFilter('all')}
+            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+              activeFilter === 'all'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            <HashtagIcon className="w-4 h-4 mr-2" />
+            All
+          </button>
           
           <button
-            onClick={() => {
-              setFilter('all');
-              setStartDate(null);
-              setEndDate(null);
-            }}
-            className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-200"
+            onClick={() => setActiveFilter('today')}
+            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+              activeFilter === 'today'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+            }`}
           >
-            Reset
+            <ClockIcon className="w-4 h-4 mr-2" />
+            Today
+          </button>
+          
+          <button
+            onClick={() => setActiveFilter('this-month')}
+            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+              activeFilter === 'this-month'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            <CalendarIcon className="w-4 h-4 mr-2" />
+            This Month
+          </button>
+          
+          <button
+            onClick={() => setActiveFilter('this-year')}
+            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+              activeFilter === 'this-year'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            <CalendarIcon className="w-4 h-4 mr-2" />
+            This Year
+          </button>
+          
+          <button
+            onClick={() => setActiveFilter('custom')}
+            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+              activeFilter === 'custom'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            <FunnelIcon className="w-4 h-4 mr-2" />
+            Custom
           </button>
         </div>
 
-        {filter === 'custom' && (
-          <div className="grid grid-cols-2 gap-4 mt-4">
+        {activeFilter === 'custom' && (
+          <div className="flex flex-wrap gap-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Start Date</label>
               <input
                 type="date"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                value={startDate ? startDate.toISOString().split('T')[0] : ''}
-                onChange={(e) => setStartDate(e.target.value ? new Date(e.target.value) : null)}
+                value={customDateStart}
+                onChange={(e) => setCustomDateStart(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">End Date</label>
               <input
                 type="date"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                value={endDate ? endDate.toISOString().split('T')[0] : ''}
-                onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : null)}
+                value={customDateEnd}
+                onChange={(e) => setCustomDateEnd(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
               />
             </div>
           </div>
         )}
+
+        <div className="flex justify-between items-center mb-4">
+          <p className="text-gray-600 dark:text-gray-400">
+            {filteredExpenses.length} {filteredExpenses.length === 1 ? 'expense' : 'expenses'} found
+          </p>
+          <div className="text-right">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">PKR {totalAmount.toFixed(2)}</p>
+          </div>
+        </div>
+
+        {filteredExpenses.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4">
+            {filteredExpenses.map((expense) => (
+              <div 
+                key={expense.id} 
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-medium text-gray-900 dark:text-gray-100">{expense.description}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {formatExpenseDate(expense.date)}
+                    </p>
+                    
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                        {expense.category}
+                      </span>
+                      
+                      {expense.paymentMethod && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                          <CreditCardIcon className="w-3 h-3 mr-1" />
+                          {expense.paymentMethod}
+                        </span>
+                      )}
+                      
+                      {expense.location && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                          <MapPinIcon className="w-3 h-3 mr-1" />
+                          {expense.location}
+                        </span>
+                      )}
+                      
+                      {expense.tags && expense.tags.map((tag: string) => (
+                        <span 
+                          key={tag}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                        >
+                          <TagIcon className="w-3 h-3 mr-1" />
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
       </div>
 
-      <div className="p-6">
-        {isLoading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          </div>
-        ) : searchedExpenses.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No expenses found</p>
-            <p className="text-gray-400">Try adjusting your search or filter criteria</p>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                      PKR {expense.amount.toFixed(2)}
+                    </p>
+                    
+                    <div className="mt-2 flex space-x-2 justify-end">
+                      <button
+                        onClick={() => setExpenseToEdit(expense)}
+                        className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                      >
+                        <PencilIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteExpense(expense.id)}
+                        className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          <ul className="space-y-4" style={{ maxHeight: '600px', overflowY: 'auto' }}>
-            {searchedExpenses.map((expense) => (
-              <ExpenseListItem key={expense.id} expense={expense} />
-            ))}
-          </ul>
+          <div className="text-center py-12">
+            <p className="text-gray-500 dark:text-gray-400">No expenses found. Try adjusting your filters or add a new expense.</p>
+          </div>
         )}
       </div>
-
-      {filter === 'custom' && !startDate && !endDate && (
-        <div className="text-center py-4 px-6 bg-yellow-50 text-yellow-700">
-          <p>Please select both start and end dates to filter expenses</p>
-        </div>
-      )}
-
-      {searchedExpenses.length > 0 && (
-        <div className="p-6 bg-gray-50 border-t">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-600">
-              Showing {searchedExpenses.length} of {expenses.length} expenses
-            </span>
-            <div className="text-right">
-              <p className="text-sm text-gray-600">Filtered Total</p>
-              <p className="text-xl font-bold text-gray-900">
-                PKR {total.toFixed(2)}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

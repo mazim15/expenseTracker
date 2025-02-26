@@ -5,6 +5,8 @@ import ExpenseForm from './components/ExpenseForm';
 import ExpenseList from './components/ExpenseList';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import BudgetManager from './components/BudgetManager';
+import DashboardSummary from './components/DashboardSummary';
+import ReportsSection from './components/ReportsSection';
 import { useState, useEffect } from 'react';
 import { auth, db } from './lib/firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
@@ -14,20 +16,24 @@ import {
   ChartBarIcon, 
   ArrowRightOnRectangleIcon, 
   UserCircleIcon, 
-  DocumentArrowDownIcon 
+  DocumentArrowDownIcon,
+  Cog6ToothIcon,
+  SunIcon,
+  MoonIcon
 } from '@heroicons/react/24/outline';
 import { exportToCSV, exportToPDF } from './utils/exportUtils';
 import Image from 'next/image';
 import { Expense } from './types';
 
-export type TabType = 'expenses' | 'analytics' | 'budget';
+export type TabType = 'expenses' | 'analytics' | 'budget' | 'reports' | 'settings';
 
 export default function Page() {
   const { user, loading } = useAuth();
-  const [categories, setCategories] = useState<string[]>([]);
-  const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('expenses');
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
+  const [darkMode, setDarkMode] = useState<boolean>(false);
 
   useEffect(() => {
     if (!user) return;
@@ -56,6 +62,30 @@ export default function Page() {
 
     return () => unsubscribe();
   }, [user]);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+      setDarkMode(true);
+      document.documentElement.classList.add('dark');
+    } else {
+      setDarkMode(false);
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    setDarkMode(!darkMode);
+    if (darkMode) {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    } else {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    }
+  };
 
   const signInWithGoogle = async () => {
     try {
@@ -96,7 +126,12 @@ export default function Page() {
 
     switch (activeTab) {
       case 'analytics':
-        return <AnalyticsDashboard expenses={expenses} />;
+        return (
+          <>
+            <DashboardSummary expenses={expenses} />
+            <AnalyticsDashboard expenses={expenses} />
+          </>
+        );
       case 'budget':
         return (
           <BudgetManager
@@ -104,6 +139,50 @@ export default function Page() {
             categories={categories}
             expenses={expenses}
           />
+        );
+      case 'reports':
+        return <ReportsSection expenses={expenses} />;
+      case 'settings':
+        return (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Settings</h2>
+            
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Dark Mode</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Toggle between light and dark theme</p>
+                </div>
+                <button 
+                  onClick={toggleTheme}
+                  className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg"
+                >
+                  {darkMode ? <SunIcon className="h-6 w-6 text-amber-500" /> : <MoonIcon className="h-6 w-6 text-gray-700 dark:text-gray-300" />}
+                </button>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Export Data</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Download your expense data</p>
+                </div>
+                <div className="flex space-x-2">
+                  <button 
+                    onClick={() => handleExport('csv')}
+                    className="px-3 py-2 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                  >
+                    CSV
+                  </button>
+                  <button 
+                    onClick={() => handleExport('pdf')}
+                    className="px-3 py-2 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200 rounded-lg hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
+                  >
+                    PDF
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         );
       default:
         return (
@@ -120,7 +199,6 @@ export default function Page() {
             <div>
               <ExpenseList
                 user={user}
-                categories={categories}
                 setExpenseToEdit={(expense) => setExpenseToEdit(expense)}
               />
             </div>
@@ -138,148 +216,132 @@ export default function Page() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center">
-              <ChartBarIcon className="h-8 w-8 text-indigo-600" />
-              <h1 className="ml-2 text-2xl font-bold text-gray-900">Expense Tracker</h1>
-            </div>
-
-            {user && (
-              <div className="hidden md:flex space-x-4">
-                {(['expenses', 'analytics', 'budget'] as TabType[]).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2 rounded-lg transition-colors ${
-                      activeTab === tab 
-                        ? 'bg-indigo-100 text-indigo-700' 
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {user ? (
-              <div className="flex items-center space-x-4">
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => handleExport('csv')}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Export to CSV"
-                  >
-                    <DocumentArrowDownIcon className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => handleExport('pdf')}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Export to PDF"
-                  >
-                    <DocumentArrowDownIcon className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <div className="flex items-center">
-                  {user.photoURL ? (
-                    <Image
-                      src={user.photoURL}
-                      alt="Profile"
-                      width={32}
-                      height={32}
-                      className="h-8 w-8 rounded-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        const fallback = document.getElementById('fallback-avatar');
-                        if (fallback) fallback.style.display = 'block';
-                      }}
-                    />
-                  ) : (
-                    <UserCircleIcon id="fallback-avatar" className="h-8 w-8 text-gray-400" />
-                  )}
-                  <span className="ml-2 text-sm font-medium text-gray-700">{user.email}</span>
-                </div>
-                <button
-                  onClick={signOut}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
-                >
-                  <ArrowRightOnRectangleIcon className="h-4 w-4 mr-2" />
-                  Sign Out
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={signInWithGoogle}
-                className="inline-flex items-center px-6 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
-              >
-                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
-                  <path
-                    fill="#FFFFFF"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#FFFFFF"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FFFFFF"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="#FFFFFF"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                Sign in with Google
-              </button>
-            )}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <header className="bg-white dark:bg-gray-800 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+          <div className="flex items-center">
+            <svg 
+              className="w-10 h-10 mr-3 text-blue-600 dark:text-blue-400" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path 
+                d="M21 18V19C21 20.1 20.1 21 19 21H5C3.89 21 3 20.1 3 19V5C3 3.9 3.89 3 5 3H19C20.1 3 21 3.9 21 5V6H12C10.89 6 10 6.9 10 8V16C10 17.1 10.89 18 12 18H21ZM12 16H22V8H12V16ZM16 13.5C15.17 13.5 14.5 12.83 14.5 12C14.5 11.17 15.17 10.5 16 10.5C16.83 10.5 17.5 11.17 17.5 12C17.5 12.83 16.83 13.5 16 13.5Z" 
+                fill="currentColor"
+              />
+            </svg>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">ExpenseTracker</h1>
           </div>
+          
+          {user ? (
+            <div className="flex items-center space-x-4">
+              <button 
+                onClick={toggleTheme}
+                className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
+              >
+                {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
+              </button>
+              <div className="flex items-center">
+                <UserCircleIcon className="h-8 w-8 text-gray-400 dark:text-gray-500 mr-2" />
+                <span className="text-sm text-gray-700 dark:text-gray-300">{user.displayName || user.email}</span>
+              </div>
+              <button
+                onClick={() => auth.signOut()}
+                className="flex items-center text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+              >
+                <ArrowRightOnRectangleIcon className="h-5 w-5 mr-1" />
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={signInWithGoogle}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Sign In with Google
+            </button>
+          )}
         </div>
-      </nav>
+      </header>
+
+      {user && (
+        <nav className="bg-white dark:bg-gray-800 shadow-sm mt-1">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex space-x-4 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab('expenses')}
+                className={`px-3 py-4 text-sm font-medium ${
+                  activeTab === 'expenses'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Expenses
+              </button>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-3 py-4 text-sm font-medium ${
+                  activeTab === 'analytics'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Analytics
+              </button>
+              <button
+                onClick={() => setActiveTab('budget')}
+                className={`px-3 py-4 text-sm font-medium ${
+                  activeTab === 'budget'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Budget
+              </button>
+              <button
+                onClick={() => setActiveTab('reports')}
+                className={`px-3 py-4 text-sm font-medium ${
+                  activeTab === 'reports'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Reports
+              </button>
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`px-3 py-4 text-sm font-medium ${
+                  activeTab === 'settings'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Settings
+              </button>
+            </div>
+          </div>
+        </nav>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {user ? (
-          renderContent()
-        ) : (
-          <div className="text-center py-16">
-            <div className="bg-white rounded-xl shadow-lg p-8 max-w-lg mx-auto">
-              <ChartBarIcon className="h-12 w-12 text-indigo-600 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Welcome to Expense Tracker</h2>
-              <p className="text-gray-600 mb-8">
-                Sign in with your Google account to start tracking your expenses, manage categories,
-                set budgets, and gain insights into your spending habits.
-              </p>
-              <button
-                onClick={signInWithGoogle}
-                className="inline-flex items-center px-8 py-3 border border-transparent rounded-lg text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
-              >
-                <svg className="w-6 h-6 mr-2" viewBox="0 0 24 24">
-                  <path
-                    fill="#FFFFFF"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#FFFFFF"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FFFFFF"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="#FFFFFF"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                Sign in with Google
-              </button>
-            </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
+        ) : !user ? (
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Welcome to ExpenseTracker</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-8">Sign in to start tracking your expenses</p>
+            <button
+              onClick={signInWithGoogle}
+              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Sign In with Google
+            </button>
+          </div>
+        ) : (
+          renderContent()
         )}
       </main>
     </div>
