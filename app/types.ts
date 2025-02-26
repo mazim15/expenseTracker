@@ -24,4 +24,6 @@ export interface BudgetData {
   spent?: number;
   period: 'monthly' | 'yearly';
   notifications?: boolean;
+  remaining?: number;
+  percentage?: number;
 } 
