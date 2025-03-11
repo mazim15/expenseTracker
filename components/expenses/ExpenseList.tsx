@@ -175,7 +175,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit }: ExpenseListP
                   </div>
                 </td>
                 <td className="py-3 px-4">{expense.location || "-"}</td>
-                <td className="py-3 px-4 text-right font-medium">{formatCurrency(expense.amount)}</td>
+                <td className="py-3 px-4 text-right font-semibold">{formatCurrency(expense.amount)}</td>
                 <td className="py-3 px-4 text-right">
                   <div className="flex justify-end gap-2">
                     <Button variant="ghost" size="icon" onClick={() => handleEditClick(expense)}>

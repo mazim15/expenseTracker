@@ -6,9 +6,19 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(amount: number, options: Intl.NumberFormatOptions = {}) {
+  // Get currency from localStorage or use PKR as default
+  let currency = 'PKR';
+  if (typeof window !== 'undefined') {
+    const savedSettings = localStorage.getItem("userSettings");
+    if (savedSettings) {
+      const settings = JSON.parse(savedSettings);
+      currency = settings.currency || 'PKR';
+    }
+  }
+  
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     ...options

@@ -28,7 +28,7 @@ export default function SettingsPage() {
   
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
-  const [currency, setCurrency] = useState("USD");
+  const [currency, setCurrency] = useState("PKR");
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   
@@ -42,7 +42,7 @@ export default function SettingsPage() {
       const savedSettings = localStorage.getItem("userSettings");
       if (savedSettings) {
         const settings = JSON.parse(savedSettings);
-        setCurrency(settings.currency || "USD");
+        setCurrency(settings.currency || "PKR");
         setNotifications(settings.notifications !== false);
         setDarkMode(settings.darkMode || false);
       }
@@ -226,6 +226,7 @@ export default function SettingsPage() {
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="PKR">Pakistani Rupee (₨)</SelectItem>
                       <SelectItem value="USD">US Dollar ($)</SelectItem>
                       <SelectItem value="EUR">Euro (€)</SelectItem>
                       <SelectItem value="GBP">British Pound (£)</SelectItem>
