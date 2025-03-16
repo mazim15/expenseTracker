@@ -5,12 +5,10 @@ import { ExpenseType, ExpenseCategory, EXPENSE_CATEGORIES } from "@/types/expens
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { format } from "date-fns";
-import { Trash2, Plus, Edit } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { Trash2, Plus } from "lucide-react";
 
 type ReceiptReviewDialogProps = {
   open: boolean;
@@ -41,7 +39,7 @@ export default function ReceiptReviewDialog({
     setSelectedItems(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
-  const handleUpdateExpense = (index: number, field: keyof ExpenseType, value: any) => {
+  const handleUpdateExpense = (index: number, field: keyof ExpenseType, value: unknown) => {
     setExpenses(prev => prev.map((expense, i) => 
       i === index ? { ...expense, [field]: value } : expense
     ));

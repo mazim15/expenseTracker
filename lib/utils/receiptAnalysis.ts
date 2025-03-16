@@ -4,6 +4,36 @@ import { ExpenseType, ExpenseCategory, EXPENSE_CATEGORIES } from "@/types/expens
 const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 const API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent";
 
+// Define interfaces for receipt data
+interface ExtractedReceiptData {
+  merchant?: string;
+  date?: string;
+  items: ExtractedReceiptItem[];
+  total?: number;
+}
+
+interface ExtractedReceiptItem {
+  name: string;
+  price: number | string;
+  category?: string;
+  quantity?: number;
+}
+
+// Remove the unused interface
+// interface ReceiptData {
+//   items: ReceiptItem[];
+//   total: number;
+//   date?: string;
+//   merchant?: string;
+// }
+
+//interface ReceiptItem {
+//  name: string;
+//  price: number;
+//  quantity?: number;
+//  category?: string;
+//}
+
 /**
  * Analyzes a receipt image using Gemini 2.0 Flash
  * @param imageData Base64 encoded image data
@@ -51,11 +81,11 @@ export async function analyzeReceipt(imageData: string): Promise<Partial<Expense
     const textContent = result.candidates[0].content.parts[0].text;
     
     // Extract JSON from response (it may be wrapped in code blocks or contain extra text)
-    let jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/) || 
+    const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/) || 
                     textContent.match(/```\n([\s\S]*?)\n```/) ||
                     textContent.match(/{[\s\S]*?}/);
                     
-    let extractedData: any = { items: [] };
+    let extractedData: ExtractedReceiptData = { items: [] };
     
     if (jsonMatch) {
       try {
@@ -83,7 +113,7 @@ export async function analyzeReceipt(imageData: string): Promise<Partial<Expense
     console.log("Raw Gemini response:", textContent);
     console.log("Extracted data:", extractedData);
     console.log("Mapped expense items:", 
-      extractedData.items?.map((item: any) => mapToExpenseType(item, extractedData.date, extractedData.merchant)) || []
+      extractedData.items?.map((item: ExtractedReceiptItem) => mapToExpenseType(item, extractedData.date, extractedData.merchant)) || []
     );
 
     // Make sure we handle empty cases more robustly
@@ -92,12 +122,11 @@ export async function analyzeReceipt(imageData: string): Promise<Partial<Expense
       return [mapToExpenseType({
         name: extractedData.merchant || "Unknown purchase",
         price: extractedData.total || 0,
-        category: "other",
       }, extractedData.date, extractedData.merchant)];
     }
 
     // Map each item to an expense object
-    return extractedData.items.map((item: any) => 
+    return extractedData.items.map((item: ExtractedReceiptItem) => 
       mapToExpenseType(item, extractedData.date, extractedData.merchant)
     );
   } catch (error) {
@@ -110,7 +139,7 @@ export async function analyzeReceipt(imageData: string): Promise<Partial<Expense
  * Maps extracted item data to ExpenseType
  */
 function mapToExpenseType(
-  item: any, 
+  item: ExtractedReceiptItem, 
   dateStr?: string, 
   merchant?: string
 ): Partial<ExpenseType> {
@@ -146,7 +175,7 @@ function mapToExpenseType(
   }
 
   return {
-    amount: parseFloat(item.price || "0"),
+    amount: typeof item.price === 'string' ? parseFloat(item.price) : item.price,
     date: dateStr ? new Date(dateStr) : new Date(),
     description: `${item.name}${merchant ? ` (${merchant})` : ''}`,
     category: matchedCategory
@@ -163,4 +192,6 @@ export function fileToBase64(file: File): Promise<string> {
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = error => reject(error);
   });
-} 
+}
+
+// Remove unused parseReceipt function 

@@ -43,7 +43,7 @@ export default function ExpensesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
-  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const _receiptImage = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detectedExpenses, setDetectedExpenses] = useState<Partial<ExpenseType>[]>([]);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
@@ -192,14 +192,15 @@ export default function ExpensesPage() {
     }
   };
   
-  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleReceiptUpload = async (event: Event) => {
+    const fileInput = event.target as HTMLInputElement;
+    const file = fileInput.files?.[0];
     if (!file) return;
     
     try {
       setIsAnalyzing(true);
       const base64Image = await fileToBase64(file);
-      setReceiptImage(base64Image);
+      _receiptImage[1](base64Image);
       
       toast.loading("Analyzing receipt...");
       
@@ -239,16 +240,23 @@ export default function ExpensesPage() {
       toast.loading(`Adding ${expenses.length} expenses...`);
       // Add all expenses with userId
       for (const expenseData of expenses) {
+        // Ensure required fields are present
         const expenseWithUser = {
           ...expenseData,
-          userId: user.uid
+          userId: user.uid,
+          // Ensure date is defined
+          date: expenseData.date || new Date(),
+          // Ensure other required fields
+          amount: expenseData.amount || 0,
+          category: expenseData.category || "other",
+          description: expenseData.description || "Unknown expense"
         };
         await addExpense(expenseWithUser, user.uid);
       }
       
       await fetchExpenses();
       setIsReviewDialogOpen(false);
-      setReceiptImage(null);
+      _receiptImage[1](null);
       setDetectedExpenses([]);
       
       toast.dismiss();
@@ -434,7 +442,7 @@ export default function ExpensesPage() {
         onSave={handleSaveMultipleExpenses}
         onCancel={() => {
           setIsReviewDialogOpen(false);
-          setReceiptImage(null);
+          _receiptImage[1](null);
           setDetectedExpenses([]);
         }}
       />

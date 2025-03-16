@@ -8,12 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { X, Plus, Upload, Loader2, Image as ImageIcon } from "lucide-react";
+import { X, Plus, Upload, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { EXPENSE_CATEGORIES, ExpenseCategoryType } from "@/types/expense";
 import CategoryDialog from "./CategoryDialog";
 import { analyzeReceipt, fileToBase64 } from "@/lib/utils/receiptAnalysis";
 import { toast } from "react-hot-toast";
+import Image from 'next/image';
 
 type ExpenseDialogProps = {
   expense?: ExpenseType;
@@ -143,10 +144,13 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
       
       const extractedData = await analyzeReceipt(base64Image);
       
-      if (extractedData.amount) setAmount(extractedData.amount.toString());
-      if (extractedData.date) setDate(format(extractedData.date, "yyyy-MM-dd"));
-      if (extractedData.category) setCategory(extractedData.category);
-      if (extractedData.description) setDescription(extractedData.description);
+      if (extractedData && extractedData.length > 0) {
+        const firstItem = extractedData[0];
+        if (firstItem.amount) setAmount(firstItem.amount.toString());
+        if (firstItem.date) setDate(format(firstItem.date, "yyyy-MM-dd"));
+        if (firstItem.category) setCategory(firstItem.category);
+        if (firstItem.description) setDescription(firstItem.description);
+      }
       
       toast.dismiss();
       toast.success("Receipt analyzed successfully");
@@ -291,10 +295,12 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
             <div className="flex flex-col items-center justify-center gap-2">
               {receiptImage ? (
                 <div className="relative w-full">
-                  <img 
+                  <Image 
                     src={receiptImage} 
                     alt="Receipt" 
                     className="max-h-40 object-contain mx-auto rounded-md" 
+                    width={500}
+                    height={300}
                   />
                   <Button
                     type="button"
