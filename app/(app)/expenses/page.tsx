@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { ExpenseType, ExpenseCategoryType, EXPENSE_CATEGORIES } from "@/types/expense";
 import { getExpenses, addExpense, updateExpense, deleteExpense } from "@/lib/expenses";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Tags, Download } from "lucide-react";
+import { Plus, Search, Tags, Download, Upload, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import ExpenseList from "@/components/expenses/ExpenseList";
@@ -17,6 +17,8 @@ import { ExpenseListSkeleton } from "@/components/ui/loading-skeleton";
 import DeleteConfirmDialog from "@/components/expenses/DeleteConfirmDialog";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
+import ReceiptReviewDialog from "@/components/expenses/ReceiptReviewDialog";
+import { fileToBase64, analyzeReceipt } from "@/lib/utils/receiptAnalysis";
 
 export default function ExpensesPage() {
   const { user } = useAuth();
@@ -40,6 +42,11 @@ export default function ExpensesPage() {
   
   const searchParams = useSearchParams();
   const router = useRouter();
+  
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [detectedExpenses, setDetectedExpenses] = useState<Partial<ExpenseType>[]>([]);
+  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   
   const sortExpenses = useCallback((expenses: ExpenseType[], sortBy: string): ExpenseType[] => {
     const sorted = [...expenses];
@@ -185,6 +192,74 @@ export default function ExpensesPage() {
     }
   };
   
+  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      setIsAnalyzing(true);
+      const base64Image = await fileToBase64(file);
+      setReceiptImage(base64Image);
+      
+      toast.loading("Analyzing receipt...");
+      
+      // Call the Gemini API to analyze the receipt
+      const extractedExpenses = await analyzeReceipt(base64Image);
+      
+      if (extractedExpenses.length === 0) {
+        toast.dismiss();
+        toast.error("No expenses detected from the receipt");
+        return;
+      }
+      
+      // Add userId to all detected expenses
+      const expensesWithUser = extractedExpenses.map(expense => ({
+        ...expense,
+        userId: user?.uid || ''
+      }));
+      
+      console.log("Extracted expenses:", extractedExpenses);
+      setDetectedExpenses(expensesWithUser);
+      setTimeout(() => {
+        setIsReviewDialogOpen(true);
+      }, 0);
+      
+      toast.dismiss();
+      toast.success(`${extractedExpenses.length} items detected from receipt`);
+    } catch (error) {
+      console.error("Error analyzing receipt:", error);
+      toast.error("Failed to analyze receipt");
+    }
+  };
+
+  const handleSaveMultipleExpenses = async (expenses: Partial<ExpenseType>[]) => {
+    if (!user || expenses.length === 0) return;
+
+    try {
+      toast.loading(`Adding ${expenses.length} expenses...`);
+      // Add all expenses with userId
+      for (const expenseData of expenses) {
+        const expenseWithUser = {
+          ...expenseData,
+          userId: user.uid
+        };
+        await addExpense(expenseWithUser, user.uid);
+      }
+      
+      await fetchExpenses();
+      setIsReviewDialogOpen(false);
+      setReceiptImage(null);
+      setDetectedExpenses([]);
+      
+      toast.dismiss();
+      toast.success(`${expenses.length} expenses added successfully`);
+    } catch (error) {
+      console.error("Error adding expenses:", error);
+      toast.dismiss();
+      toast.error("Failed to add expenses");
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="flex flex-col space-y-6">
@@ -203,10 +278,37 @@ export default function ExpensesPage() {
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
-            <Button onClick={() => setIsAddDialogOpen(true)} className="shadow-md hover:shadow-lg transition-all">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Expense
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button onClick={() => setIsAddDialogOpen(true)} className="shadow-md hover:shadow-lg transition-all">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Expense
+              </Button>
+              <Button 
+                onClick={() => {
+                  // Create a file input element
+                  const fileInput = document.createElement('input');
+                  fileInput.type = 'file';
+                  fileInput.accept = 'image/*';
+                  fileInput.addEventListener('change', handleReceiptUpload);
+                  fileInput.click();
+                }} 
+                variant="outline"
+                className="shadow-sm"
+                disabled={isAnalyzing}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Scan Receipt
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
         
@@ -324,6 +426,18 @@ export default function ExpensesPage() {
         title="Delete Expense"
         description="Are you sure you want to delete this expense? This action cannot be undone."
       />
+      
+      <ReceiptReviewDialog
+        open={isReviewDialogOpen}
+        onOpenChange={setIsReviewDialogOpen}
+        expenses={detectedExpenses}
+        onSave={handleSaveMultipleExpenses}
+        onCancel={() => {
+          setIsReviewDialogOpen(false);
+          setReceiptImage(null);
+          setDetectedExpenses([]);
+        }}
+      />
     </div>
   );
-} 
+}

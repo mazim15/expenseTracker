@@ -8,10 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Upload, Loader2, Image as ImageIcon } from "lucide-react";
 import { format } from "date-fns";
 import { EXPENSE_CATEGORIES, ExpenseCategoryType } from "@/types/expense";
 import CategoryDialog from "./CategoryDialog";
+import { analyzeReceipt, fileToBase64 } from "@/lib/utils/receiptAnalysis";
+import { toast } from "react-hot-toast";
 
 type ExpenseDialogProps = {
   expense?: ExpenseType;
@@ -37,6 +39,8 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
     }
     return EXPENSE_CATEGORIES;
   });
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   useEffect(() => {
     if (expense) {
@@ -124,6 +128,35 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
 
   const handleCategoriesUpdate = (newCategories: typeof EXPENSE_CATEGORIES) => {
     setLocalCategories(newCategories);
+  };
+
+  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      const base64Image = await fileToBase64(file);
+      setReceiptImage(base64Image);
+      
+      setIsAnalyzing(true);
+      toast.loading("Analyzing receipt...");
+      
+      const extractedData = await analyzeReceipt(base64Image);
+      
+      if (extractedData.amount) setAmount(extractedData.amount.toString());
+      if (extractedData.date) setDate(format(extractedData.date, "yyyy-MM-dd"));
+      if (extractedData.category) setCategory(extractedData.category);
+      if (extractedData.description) setDescription(extractedData.description);
+      
+      toast.dismiss();
+      toast.success("Receipt analyzed successfully");
+    } catch (error) {
+      console.error("Error processing receipt:", error);
+      toast.dismiss();
+      toast.error("Failed to analyze receipt");
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -250,6 +283,62 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
               >
                 <Plus className="h-4 w-4" />
               </Button>
+            </div>
+          </div>
+          
+          <div className="border border-dashed rounded-md p-4">
+            <Label htmlFor="receipt" className="text-sm font-medium mb-2 block">Upload Receipt</Label>
+            <div className="flex flex-col items-center justify-center gap-2">
+              {receiptImage ? (
+                <div className="relative w-full">
+                  <img 
+                    src={receiptImage} 
+                    alt="Receipt" 
+                    className="max-h-40 object-contain mx-auto rounded-md" 
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 mx-auto flex"
+                    onClick={() => setReceiptImage(null)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <div className="w-full">
+                  <div className="flex items-center justify-center py-3 border-2 border-dashed rounded-md">
+                    <label 
+                      htmlFor="receipt-upload" 
+                      className="flex flex-col items-center justify-center cursor-pointer"
+                    >
+                      <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                      <span className="text-sm text-muted-foreground">
+                        Click to upload receipt
+                      </span>
+                      <input
+                        id="receipt-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleReceiptUpload}
+                        disabled={isAnalyzing}
+                      />
+                    </label>
+                  </div>
+                  <p className="text-xs text-center text-muted-foreground mt-2">
+                    Upload a receipt to automatically extract expense details
+                  </p>
+                </div>
+              )}
+              
+              {isAnalyzing && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Analyzing receipt...</span>
+                </div>
+              )}
             </div>
           </div>
           

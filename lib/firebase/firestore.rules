@@ -1,15 +1,49 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Basic rule to check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Check if the user is accessing their own data
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // User document rules
     match /users/{userId} {
-      // Remove these rules if they exist
-      // match /incomes/{incomeId} { ... }
-      // match /budgets/{budgetId} { ... }
+      // Allow users to read and write only their own user document
+      allow read, write: if isOwner(userId);
       
-      // Keep existing expense rules
+      // Expenses subcollection
       match /expenses/{expenseId} {
-        allow read, write: if request.auth.uid == userId;
+        allow read, write: if isOwner(userId);
       }
+      
+      // Add rules for other user-specific subcollections if needed
+      // For example, if you add budgets or incomes back in the future:
+      match /budgets/{budgetId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /incomes/{incomeId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    // Rules for notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow write: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+    
+    // Add any additional collections needed for your application
+    // For example, if you have shared data:
+    match /sharedData/{docId} {
+      allow read: if isSignedIn();
+      // Restrict writes to specific conditions as needed
     }
   }
 } 
