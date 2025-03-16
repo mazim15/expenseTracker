@@ -1,7 +1,7 @@
 import { ExpenseType, ExpenseCategory, EXPENSE_CATEGORIES } from "@/types/expense";
 
 // API key for Gemini 2.0 Flash
-const API_KEY = "AIzaSyBuNKLW2q28nw7UMvhr9HCfIHALN-1_Rg8";
+const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 const API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent";
 
 /**
