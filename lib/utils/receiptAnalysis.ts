@@ -4,6 +4,11 @@ import { ExpenseType, ExpenseCategory, EXPENSE_CATEGORIES } from "@/types/expens
 const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 const API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent";
 
+// Check for API key presence at the top of the file
+if (!API_KEY) {
+  console.error("Missing Gemini API key. Make sure NEXT_PUBLIC_GEMINI_API_KEY is set in .env.local file.");
+}
+
 // Define interfaces for receipt data
 interface ExtractedReceiptData {
   merchant?: string;
@@ -41,6 +46,18 @@ interface ExtractedReceiptItem {
  */
 export async function analyzeReceipt(imageData: string): Promise<Partial<ExpenseType>[]> {
   try {
+    if (!API_KEY) {
+      throw new Error("Missing Gemini API key");
+    }
+
+    // Make sure we have valid base64 image data
+    if (!imageData || !imageData.includes('base64')) {
+      throw new Error("Invalid image data");
+    }
+
+    // Extract the base64 portion correctly
+    const base64Data = imageData.split(',')[1] || imageData;
+
     // Prepare request to Gemini API with prompt that asks for multiple items
     const requestBody = {
       contents: [
@@ -51,8 +68,8 @@ export async function analyzeReceipt(imageData: string): Promise<Partial<Expense
             },
             {
               inline_data: {
-                mime_type: "image/jpeg",
-                data: imageData.split(',')[1] // Remove the data:image/jpeg;base64, part
+                mime_type: "image/jpeg", // This might need to be dynamic based on image type
+                data: base64Data
               }
             }
           ]
@@ -64,7 +81,9 @@ export async function analyzeReceipt(imageData: string): Promise<Partial<Expense
       }
     };
 
-    // Call the Gemini API
+    console.log("Sending request to Gemini API...");
+    
+    // Call the Gemini API with better error handling
     const response = await fetch(`${API_URL}?key=${API_KEY}`, {
       method: "POST",
       headers: {
@@ -74,10 +93,19 @@ export async function analyzeReceipt(imageData: string): Promise<Partial<Expense
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`API error (${response.status}):`, errorText);
+      throw new Error(`API error: ${response.status} - ${errorText.substring(0, 100)}`);
     }
 
     const result = await response.json();
+    
+    // Check if we have valid data
+    if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts) {
+      console.error("Invalid response structure:", result);
+      throw new Error("Invalid response structure from Gemini API");
+    }
+    
     const textContent = result.candidates[0].content.parts[0].text;
     
     // Extract JSON from response (it may be wrapped in code blocks or contain extra text)
