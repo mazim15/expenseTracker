@@ -15,6 +15,8 @@ import CategoryDialog from "./CategoryDialog";
 import { analyzeReceipt, fileToBase64 } from "@/lib/utils/receiptAnalysis";
 import { toast } from "react-hot-toast";
 import Image from 'next/image';
+import { useAuth } from "@/lib/auth/AuthContext";
+import { getUserCategories } from "@/lib/categories";
 
 type ExpenseDialogProps = {
   expense?: ExpenseType;
@@ -24,6 +26,7 @@ type ExpenseDialogProps = {
 };
 
 export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: ExpenseDialogProps) {
+  const { user } = useAuth();
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [category, setCategory] = useState<ExpenseCategory>("food");
@@ -33,13 +36,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
   const [location, setLocation] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
-  const [localCategories, setLocalCategories] = useState(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("expense-categories");
-      return stored ? JSON.parse(stored) : EXPENSE_CATEGORIES;
-    }
-    return EXPENSE_CATEGORIES;
-  });
+  const [localCategories, setLocalCategories] = useState(EXPENSE_CATEGORIES);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
@@ -61,6 +58,39 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
     }
     setErrors({});
   }, [expense, open]);
+  
+  useEffect(() => {
+    const fetchCategories = async () => {
+      if (user && user.uid) {
+        try {
+          console.log("Fetching categories for user:", user.uid);
+          
+          // First use localStorage as fallback
+          const storedCategories = localStorage.getItem("expense-categories");
+          if (storedCategories) {
+            setLocalCategories(JSON.parse(storedCategories));
+          }
+          
+          // Then try to get from database and update if found
+          const userCategories = await getUserCategories(user.uid);
+          if (userCategories && userCategories.length > 0) {
+            console.log("Found categories in database:", userCategories);
+            setLocalCategories(userCategories);
+            // Update localStorage with the latest
+            localStorage.setItem("expense-categories", JSON.stringify(userCategories));
+          } else {
+            console.log("No categories found in database, using default");
+          }
+        } catch (error) {
+          console.error("Error fetching categories:", error);
+        }
+      } else {
+        console.log("No authenticated user, using local categories");
+      }
+    };
+    
+    fetchCategories();
+  }, [user]);
   
   const handleAddTag = () => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {

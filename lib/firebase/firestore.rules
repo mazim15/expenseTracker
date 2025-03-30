@@ -21,6 +21,11 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
       
+      // Settings subcollection - added for categories
+      match /settings/{settingId} {
+        allow read, write: if isOwner(userId);
+      }
+      
       // Add rules for other user-specific subcollections if needed
       // For example, if you add budgets or incomes back in the future:
       match /budgets/{budgetId} {

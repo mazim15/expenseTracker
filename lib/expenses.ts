@@ -46,6 +46,8 @@ export async function getExpenses(userId: string, limitCount?: number): Promise<
         date: data.date.toDate(),
         category: data.category,
         description: data.description,
+        tags: data.tags || [],
+        location: data.location || "",
         createdAt: data.createdAt.toDate(),
         updatedAt: data.updatedAt.toDate()
       };
@@ -180,6 +182,8 @@ export async function getExpensesForPeriod(userId: string, month: number, year: 
         date: data.date.toDate(),
         category: data.category,
         description: data.description,
+        tags: data.tags || [],
+        location: data.location || "",
         createdAt: data.createdAt.toDate(),
         updatedAt: data.updatedAt.toDate()
       };

@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { X, Plus, Save } from "lucide-react";
 import { EXPENSE_CATEGORIES, ExpenseCategoryType, updateExpenseCategories } from "@/types/expense";
+import { useAuth } from "@/lib/auth/AuthContext";
+import { saveUserCategories } from "@/lib/categories";
+import { toast } from "react-hot-toast";
 
 type CategoryDialogProps = {
   open: boolean;
@@ -15,6 +18,7 @@ type CategoryDialogProps = {
 };
 
 export default function CategoryDialog({ open, onOpenChange, onCategoriesUpdate }: CategoryDialogProps) {
+  const { user } = useAuth();
   const [categories, setCategories] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("expense-categories");
@@ -36,13 +40,29 @@ export default function CategoryDialog({ open, onOpenChange, onCategoriesUpdate 
     setCategories(categories.filter((cat: ExpenseCategoryType) => cat.value !== valueToRemove));
   };
 
-  const handleSave = () => {
-    updateExpenseCategories(categories);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("expense-categories", JSON.stringify(categories));
+  const handleSave = async () => {
+    try {
+      updateExpenseCategories(categories);
+      
+      // Save to localStorage for immediate use
+      if (typeof window !== "undefined") {
+        localStorage.setItem("expense-categories", JSON.stringify(categories));
+      }
+      
+      // Also save to database if user is authenticated
+      if (user && user.uid) {
+        console.log("Saving categories to database for user:", user.uid);
+        await saveUserCategories(user.uid, categories);
+      } else {
+        console.warn("Cannot save categories to database: No authenticated user");
+      }
+      
+      onCategoriesUpdate?.(categories);
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Failed to save categories:", error);
+      toast.error("Failed to save categories");
     }
-    onCategoriesUpdate?.(categories);
-    onOpenChange(false);
   };
 
   return (

@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Edit, Trash2, ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
 import ExpenseDialog from "./ExpenseDialog";
-import DeleteConfirmDialog from "./DeleteConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 
 type ExpenseListProps = {
@@ -50,7 +49,9 @@ export default function ExpenseList({ expenses, onDelete, onEdit }: ExpenseListP
   };
   
   const handleDeleteClick = (id: string) => {
-    setDeletingExpenseId(id);
+    if (onDelete) {
+      onDelete(id);
+    }
   };
   
   const handleEditSave = (expense: ExpenseType) => {
@@ -58,18 +59,6 @@ export default function ExpenseList({ expenses, onDelete, onEdit }: ExpenseListP
       onEdit(expense);
     }
     setEditingExpense(null);
-  };
-  
-  const handleDeleteConfirm = async () => {
-    if (deletingExpenseId && onDelete) {
-      try {
-        await onDelete(deletingExpenseId);
-        setDeletingExpenseId(null);
-      } catch (error) {
-        console.error("Error deleting expense:", error);
-        // Handle error (show toast, etc.)
-      }
-    }
   };
   
   const handleSort = (field: 'date' | 'amount' | 'category') => {
@@ -202,12 +191,6 @@ export default function ExpenseList({ expenses, onDelete, onEdit }: ExpenseListP
           onSave={handleEditSave}
         />
       )}
-      
-      <DeleteConfirmDialog
-        open={!!deletingExpenseId}
-        onOpenChange={(open) => !open && setDeletingExpenseId(null)}
-        onConfirm={handleDeleteConfirm}
-      />
     </div>
   );
 } 
