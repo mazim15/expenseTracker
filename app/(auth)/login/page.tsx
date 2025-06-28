@@ -22,14 +22,62 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log("Login attempt:", { email, passwordLength: password.length });
+    
     try {
       setError("");
       setLoading(true);
+      
+      console.log("Calling signIn...");
       await signIn(email, password);
-      router.push("/dashboard");
-    } catch (err) {
-      const error = err as Error;
-      setError(error.message || "Failed to sign in");
+      
+      console.log("Sign in successful, redirecting to dashboard...");
+      
+      // Small delay to ensure auth state is updated
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Get redirect URL from query params or default to dashboard
+      const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/dashboard';
+      console.log("Redirecting to:", redirectTo);
+      
+      router.push(redirectTo);
+      
+      // Force a page refresh to ensure auth state is properly loaded
+      window.location.href = redirectTo;
+    } catch (err: unknown) {
+      console.error("Login error:", err);
+      
+      let errorMessage = "Failed to sign in";
+      
+      if (err && typeof err === 'object' && 'code' in err) {
+        const firebaseErr = err as { code: string; message?: string };
+        switch (firebaseErr.code) {
+          case 'auth/user-not-found':
+            errorMessage = "No account found with this email address";
+            break;
+          case 'auth/wrong-password':
+            errorMessage = "Incorrect password";
+            break;
+          case 'auth/invalid-email':
+            errorMessage = "Invalid email address";
+            break;
+          case 'auth/user-disabled':
+            errorMessage = "This account has been disabled";
+            break;
+          case 'auth/too-many-requests':
+            errorMessage = "Too many failed attempts. Please try again later";
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = "Network error. Please check your connection";
+            break;
+          default:
+            errorMessage = firebaseErr.message || "An unknown error occurred";
+        }
+      } else if (err && typeof err === 'object' && 'message' in err) {
+        errorMessage = (err as { message: string }).message || "Failed to sign in";
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

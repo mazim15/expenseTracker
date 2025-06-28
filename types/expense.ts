@@ -34,16 +34,11 @@ const DEFAULT_CATEGORIES: ExpenseCategoryType[] = [
   { value: "other", label: "Other" }
 ];
 
-// Initialize categories from storage or defaults
-export let EXPENSE_CATEGORIES: ExpenseCategoryType[] = 
-  typeof window !== "undefined" 
-    ? getStoredCategories() || DEFAULT_CATEGORIES 
-    : DEFAULT_CATEGORIES;
+// Export default categories for components to use
+export const EXPENSE_CATEGORIES: ExpenseCategoryType[] = DEFAULT_CATEGORIES;
 
+// Legacy function for backward compatibility - now just returns defaults
 export function updateExpenseCategories(newCategories: ExpenseCategoryType[]) {
-  EXPENSE_CATEGORIES = newCategories;
-  // Store the updated categories
-  if (typeof window !== "undefined") {
-    localStorage.setItem("expense-categories", JSON.stringify(newCategories));
-  }
+  // This function is deprecated - use database-based category management instead
+  console.warn("updateExpenseCategories is deprecated. Use saveUserCategories from @/lib/categories instead");
 } 

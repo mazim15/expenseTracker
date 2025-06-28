@@ -11,7 +11,6 @@ import CategoryChart from "@/components/analytics/CategoryChart";
 import { formatCurrency } from "@/lib/utils";
 import { CalendarIcon, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 import { format, subMonths } from "date-fns";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 //import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { EXPENSE_CATEGORIES } from "@/types/expense";
 
@@ -20,9 +19,7 @@ export default function AnalyticsPage() {
   const [currentMonthExpenses, setCurrentMonthExpenses] = useState<ExpenseType[]>([]);
   const [previousMonthExpenses, setPreviousMonthExpenses] = useState<ExpenseType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState("month"); // "week", "month", "quarter", "year"
   const [topCategories, setTopCategories] = useState<{category: string, amount: number}[]>([]);
-  const [expenseTrend, setExpenseTrend] = useState<{date: string, amount: number}[]>([]);
   const [averagePerDay, setAveragePerDay] = useState(0);
   const [highestExpense, setHighestExpense] = useState<ExpenseType | null>(null);
   
@@ -87,21 +84,6 @@ export default function AnalyticsPage() {
       const daysPassed = Math.min(currentDate.getDate(), daysInMonth);
       setAveragePerDay(currentMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0) / daysPassed);
       
-      // Generate expense trend
-      const dailyTotals: Record<string, number> = {};
-      currentMonthExpenses.forEach(expense => {
-        const dateStr = format(expense.date, "yyyy-MM-dd");
-        if (!dailyTotals[dateStr]) {
-          dailyTotals[dateStr] = 0;
-        }
-        dailyTotals[dateStr] += expense.amount;
-      });
-      
-      const trend = Object.entries(dailyTotals)
-        .map(([date, amount]) => ({ date, amount }))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      
-      setExpenseTrend(trend);
     }
   }, [currentMonthExpenses]);
   
@@ -134,10 +116,17 @@ export default function AnalyticsPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="flex flex-col space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-primary/10 to-transparent p-6 rounded-lg">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-            <p className="text-muted-foreground">Insights into your financial habits</p>
+        <div className="relative overflow-hidden">
+          <div className="absolute inset-0 gradient-mesh opacity-30" />
+          <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-primary/5 via-transparent to-accent/5 p-8 rounded-xl border glassmorphism">
+            <div className="animate-fade-in">
+              <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                Analytics
+              </h1>
+              <p className="text-muted-foreground mt-2 text-lg">
+                Insights into your financial habits
+              </p>
+            </div>
           </div>
         </div>
         
@@ -148,27 +137,33 @@ export default function AnalyticsPage() {
         ) : (
           <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-4">
-              <Card>
+              <Card variant="interactive" className="animate-fade-in hover-lift">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Current Month
                   </CardTitle>
-                  <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <CalendarIcon className="h-4 w-4 text-primary" />
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{formatCurrency(currentTotal)}</div>
+                  <div className="text-2xl font-bold gradient-primary bg-clip-text text-transparent">
+                    {formatCurrency(currentTotal)}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     {format(new Date(), "MMMM yyyy")}
                   </p>
                 </CardContent>
               </Card>
               
-              <Card>
+              <Card variant="interactive" className="animate-fade-in hover-lift" style={{ animationDelay: '100ms' }}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Previous Month
                   </CardTitle>
-                  <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                  <div className="p-2 rounded-lg bg-muted/50">
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{formatCurrency(previousTotal)}</div>
@@ -178,16 +173,18 @@ export default function AnalyticsPage() {
                 </CardContent>
               </Card>
               
-              <Card>
+              <Card variant="interactive" className="animate-fade-in hover-lift" style={{ animationDelay: '200ms' }}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Month-over-Month
                   </CardTitle>
-                  {isIncrease ? (
-                    <TrendingUp className="h-4 w-4 text-red-500" />
-                  ) : (
-                    <TrendingDown className="h-4 w-4 text-green-500" />
-                  )}
+                  <div className={`p-2 rounded-lg ${isIncrease ? 'bg-red-50 dark:bg-red-950/30' : 'bg-green-50 dark:bg-green-950/30'}`}>
+                    {isIncrease ? (
+                      <TrendingUp className="h-4 w-4 text-red-500" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-green-500" />
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className={`text-2xl font-bold ${isIncrease ? 'text-red-500' : 'text-green-500'}`}>
@@ -199,12 +196,14 @@ export default function AnalyticsPage() {
                 </CardContent>
               </Card>
               
-              <Card>
+              <Card variant="interactive" className="animate-fade-in hover-lift" style={{ animationDelay: '300ms' }}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
                     Average Expense
                   </CardTitle>
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <div className="p-2 rounded-lg bg-accent/20">
+                    <DollarSign className="h-4 w-4 text-accent-foreground" />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">

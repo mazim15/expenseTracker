@@ -10,14 +10,21 @@ import {
   deleteDoc, 
   doc, 
   Timestamp,
-  // startAt,
-  // endAt
+  startAfter,
+  QueryDocumentSnapshot,
+  DocumentData,
+  FieldValue
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ExpenseType } from "@/types/expense";
+import { transformFirebaseExpense } from "@/lib/utils/typeGuards";
 
-// Get expenses for a user with optional limit
-export async function getExpenses(userId: string, limitCount?: number): Promise<ExpenseType[]> {
+// Get expenses for a user with optional limit and pagination
+export async function getExpenses(
+  userId: string, 
+  limitCount?: number,
+  lastVisible?: QueryDocumentSnapshot<DocumentData>
+): Promise<{ expenses: ExpenseType[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, hasMore: boolean }> {
   try {
     // Create a reference to the user's expenses subcollection
     const userExpensesCollection = collection(db, "users", userId, "expenses");
@@ -31,31 +38,41 @@ export async function getExpenses(userId: string, limitCount?: number): Promise<
       q = query(q, limit(limitCount));
     }
     
+    if (lastVisible) {
+      q = query(q, startAfter(lastVisible));
+    }
+    
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.empty) {
-      return [];
+      return { expenses: [], lastVisible: null, hasMore: false };
     }
     
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        userId: userId,
-        amount: data.amount,
-        date: data.date.toDate(),
-        category: data.category,
-        description: data.description,
-        tags: data.tags || [],
-        location: data.location || "",
-        createdAt: data.createdAt.toDate(),
-        updatedAt: data.updatedAt.toDate()
-      };
-    });
+    const expenses = querySnapshot.docs
+      .map(doc => transformFirebaseExpense(doc, userId))
+      .filter((expense): expense is ExpenseType => expense !== null);
+    
+    const lastDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+    const hasMore = querySnapshot.docs.length === (limitCount || Infinity);
+    
+    return {
+      expenses,
+      lastVisible: lastDoc,
+      hasMore
+    };
   } catch (error) {
     console.error("Error getting expenses:", error);
-    return [];
+    if (error instanceof Error) {
+      throw new Error(`Failed to fetch expenses: ${error.message}`);
+    }
+    throw new Error('Failed to fetch expenses: Unknown error');
   }
+}
+
+// Simple wrapper for backward compatibility
+export async function getAllExpenses(userId: string): Promise<ExpenseType[]> {
+  const result = await getExpenses(userId);
+  return result.expenses;
 }
 
 // Get expenses for a specific month
@@ -76,19 +93,9 @@ export async function getExpensesByMonth(userId: string, month: number, year: nu
   
   const querySnapshot = await getDocs(q);
   
-  return querySnapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      userId: userId,
-      amount: data.amount,
-      date: data.date.toDate(),
-      category: data.category,
-      description: data.description,
-      createdAt: data.createdAt.toDate(),
-      updatedAt: data.updatedAt.toDate()
-    };
-  });
+  return querySnapshot.docs
+    .map(doc => transformFirebaseExpense(doc, userId))
+    .filter((expense): expense is ExpenseType => expense !== null);
 }
 
 // Add a new expense
@@ -108,7 +115,10 @@ export async function addExpense(expense: Omit<ExpenseType, 'id' | 'createdAt' |
     return docRef.id;
   } catch (error) {
     console.error("Error adding expense:", error);
-    throw error;
+    if (error instanceof Error) {
+      throw new Error(`Failed to add expense: ${error.message}`);
+    }
+    throw new Error('Failed to add expense: Unknown error');
   }
 }
 
@@ -137,11 +147,13 @@ export async function updateExpense(userId: string, expenseId: string, expenseDa
     });
 
     // Type assertion to match Firestore's expected type
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await updateDoc(expenseDoc, updateData as { [x: string]: any });
+    await updateDoc(expenseDoc, updateData as Record<string, FieldValue | Partial<unknown> | undefined>);
   } catch (error) {
     console.error("Error updating expense:", error);
-    throw error;
+    if (error instanceof Error) {
+      throw new Error(`Failed to update expense: ${error.message}`);
+    }
+    throw new Error('Failed to update expense: Unknown error');
   }
 }
 
@@ -153,7 +165,10 @@ export async function deleteExpense(id: string, userId: string): Promise<void> {
     await deleteDoc(expenseDoc);
   } catch (error) {
     console.error("Error deleting expense:", error);
-    throw error;
+    if (error instanceof Error) {
+      throw new Error(`Failed to delete expense: ${error.message}`);
+    }
+    throw new Error('Failed to delete expense: Unknown error');
   }
 }
 
@@ -173,23 +188,14 @@ export async function getExpensesForPeriod(userId: string, month: number, year: 
     
     const querySnapshot = await getDocs(q);
     
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        userId: data.userId,
-        amount: data.amount,
-        date: data.date.toDate(),
-        category: data.category,
-        description: data.description,
-        tags: data.tags || [],
-        location: data.location || "",
-        createdAt: data.createdAt.toDate(),
-        updatedAt: data.updatedAt.toDate()
-      };
-    });
+    return querySnapshot.docs
+      .map(doc => transformFirebaseExpense(doc, userId))
+      .filter((expense): expense is ExpenseType => expense !== null);
   } catch (error) {
     console.error("Error getting expenses for period:", error);
-    throw error;
+    if (error instanceof Error) {
+      throw new Error(`Failed to get expenses for period: ${error.message}`);
+    }
+    throw new Error('Failed to get expenses for period: Unknown error');
   }
 } 

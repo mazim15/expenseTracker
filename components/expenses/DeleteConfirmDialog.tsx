@@ -34,11 +34,12 @@ export default function DeleteConfirmDialog({
     try {
       setLoading(true);
       await onConfirm();
+      onOpenChange(false);
     } catch (error) {
       console.error("Error during delete operation:", error);
+      // Don't close dialog on error, let the error handler in the parent deal with it
     } finally {
       setLoading(false);
-      onOpenChange(false);
     }
   };
 
@@ -55,8 +56,12 @@ export default function DeleteConfirmDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+          <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+          <AlertDialogAction 
+            onClick={handleConfirm} 
+            disabled={loading}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+          >
             {loading ? "Deleting..." : "Delete"}
           </AlertDialogAction>
         </AlertDialogFooter>

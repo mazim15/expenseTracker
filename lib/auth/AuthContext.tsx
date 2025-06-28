@@ -61,7 +61,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    try {
+      console.log("AuthContext: Attempting sign in with:", email);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log("AuthContext: Sign in successful:", userCredential.user.uid);
+    } catch (error: unknown) {
+      console.error("AuthContext: Sign in failed:", error);
+      throw error;
+    }
   };
 
   const signOut = async () => {
@@ -69,7 +76,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
+    try {
+      const actionCodeSettings = {
+        url: `${window.location.origin}/login`,
+        handleCodeInApp: false,
+      };
+      
+      await sendPasswordResetEmail(auth, email, actionCodeSettings);
+      console.log('Password reset email sent successfully to:', email);
+    } catch (error: unknown) {
+      console.error('Password reset error:', error);
+      const errorMessage = error && typeof error === 'object' && 'message' in error 
+        ? (error as { message: string }).message 
+        : 'Failed to send password reset email';
+      throw new Error(errorMessage);
+    }
   };
 
   const updateUser = async (profileData: UserProfileUpdate) => {

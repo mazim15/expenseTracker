@@ -13,7 +13,7 @@ import { format } from "date-fns";
 import { EXPENSE_CATEGORIES, ExpenseCategoryType } from "@/types/expense";
 import CategoryDialog from "./CategoryDialog";
 import { analyzeReceipt, fileToBase64 } from "@/lib/utils/receiptAnalysis";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import Image from 'next/image';
 import { useAuth } from "@/lib/auth/AuthContext";
 import { getUserCategories } from "@/lib/categories";
@@ -39,6 +39,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
   const [localCategories, setLocalCategories] = useState(EXPENSE_CATEGORIES);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   useEffect(() => {
     if (expense) {
@@ -63,29 +64,53 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
     const fetchCategories = async () => {
       if (user && user.uid) {
         try {
-          console.log("Fetching categories for user:", user.uid);
-          
-          // First use localStorage as fallback
-          const storedCategories = localStorage.getItem("expense-categories");
-          if (storedCategories) {
-            setLocalCategories(JSON.parse(storedCategories));
-          }
-          
-          // Then try to get from database and update if found
+          // Try to get from database first
           const userCategories = await getUserCategories(user.uid);
           if (userCategories && userCategories.length > 0) {
-            console.log("Found categories in database:", userCategories);
             setLocalCategories(userCategories);
-            // Update localStorage with the latest
+            // Update localStorage for faster access
             localStorage.setItem("expense-categories", JSON.stringify(userCategories));
           } else {
-            console.log("No categories found in database, using default");
+            // If no database categories, check localStorage
+            const storedCategories = localStorage.getItem("expense-categories");
+            if (storedCategories) {
+              try {
+                setLocalCategories(JSON.parse(storedCategories));
+              } catch (error) {
+                console.error("Error parsing stored categories:", error);
+                setLocalCategories(EXPENSE_CATEGORIES);
+              }
+            } else {
+              // Use defaults
+              setLocalCategories(EXPENSE_CATEGORIES);
+            }
           }
         } catch (error) {
           console.error("Error fetching categories:", error);
+          // Fallback to localStorage or defaults
+          const storedCategories = localStorage.getItem("expense-categories");
+          if (storedCategories) {
+            try {
+              setLocalCategories(JSON.parse(storedCategories));
+            } catch {
+              setLocalCategories(EXPENSE_CATEGORIES);
+            }
+          } else {
+            setLocalCategories(EXPENSE_CATEGORIES);
+          }
         }
       } else {
-        console.log("No authenticated user, using local categories");
+        // No user, use localStorage or defaults
+        const storedCategories = localStorage.getItem("expense-categories");
+        if (storedCategories) {
+          try {
+            setLocalCategories(JSON.parse(storedCategories));
+          } catch {
+            setLocalCategories(EXPENSE_CATEGORIES);
+          }
+        } else {
+          setLocalCategories(EXPENSE_CATEGORIES);
+        }
       }
     };
     
@@ -93,9 +118,14 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
   }, [user]);
   
   const handleAddTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()]);
+    const newTag = tagInput.trim();
+    if (newTag && !tags.includes(newTag) && newTag.length <= 20) {
+      setTags([...tags, newTag]);
       setTagInput("");
+    } else if (newTag.length > 20) {
+      toast.error("Tag must be 20 characters or less");
+    } else if (tags.includes(newTag)) {
+      toast.error("Tag already exists");
     }
   };
 
@@ -125,6 +155,18 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
       newErrors.category = "Please select a category";
     }
     
+    if (!description.trim()) {
+      newErrors.description = "Please enter a description";
+    }
+    
+    if (location && location.length > 100) {
+      newErrors.location = "Location must be 100 characters or less";
+    }
+    
+    if (tags.length > 10) {
+      newErrors.tags = "Maximum 10 tags allowed";
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -148,10 +190,14 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
     };
 
     try {
+      setIsSubmitting(true);
       await onSave(expenseData);
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving expense:', error);
+      toast.error('Failed to save expense');
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -195,164 +241,175 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 overflow-hidden max-w-md">
-        <DialogHeader className="bg-blue-600 text-white p-4">
-          <DialogTitle className="text-xl font-bold text-white">
+      <DialogContent className="p-0 overflow-hidden max-w-md max-h-[90vh] flex flex-col">
+        <DialogHeader className="bg-primary text-primary-foreground p-3 flex-shrink-0">
+          <DialogTitle className="text-lg font-semibold">
             {expense ? "Edit Expense" : "Add New Expense"}
           </DialogTitle>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div>
-            <Label htmlFor="amount" className="text-sm font-medium">Amount (PKR)</Label>
-            <Input
-              id="amount"
-              type="number"
-              step="0.01"
-              min="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              className="mt-1"
-            />
-            {errors.amount && <p className="text-sm text-red-500 mt-1">{errors.amount}</p>}
-          </div>
-          
-          <div>
-            <Label htmlFor="description" className="text-sm font-medium">Description</Label>
-            <Input
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What did you spend on?"
-              className="mt-1"
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="category" className="text-sm font-medium">Category</Label>
-            <div className="flex gap-2 mt-1">
-              <Select 
-                value={category} 
-                onValueChange={(value: string) => setCategory(value as ExpenseCategory)}
-              >
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {localCategories.map((cat: ExpenseCategoryType) => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="icon" 
-                className="shrink-0"
-                onClick={() => setCategoryDialogOpen(true)}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
+        <div className="flex-1 overflow-y-auto">
+          <form onSubmit={handleSubmit} className="p-4 space-y-3">
+            {/* Essential Fields */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="amount" className="text-xs font-medium">Amount (PKR)</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="mt-1 h-9"
+                />
+                {errors.amount && <p className="text-xs text-red-500 mt-1">{errors.amount}</p>}
+              </div>
+              
+              <div>
+                <Label htmlFor="date" className="text-xs font-medium">Date</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="mt-1 h-9"
+                />
+                {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
+              </div>
             </div>
-            {errors.category && <p className="text-sm text-red-500 mt-1">{errors.category}</p>}
-          </div>
-          
-          <div>
-            <Label htmlFor="date" className="text-sm font-medium">Date</Label>
-            <Input
-              id="date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="mt-1"
-            />
-            {errors.date && <p className="text-sm text-red-500 mt-1">{errors.date}</p>}
-          </div>
-          
-          <div>
-            <Label htmlFor="location" className="text-sm font-medium">Location</Label>
-            <Input
-              id="location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Enter location (optional)"
-              className="mt-1"
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="tags" className="text-sm font-medium">Tags</Label>
-            <div className="flex flex-wrap gap-2 mt-1 mb-2">
-              {tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="flex items-center gap-1">
-                  {tag}
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveTag(tag)}
-                    className="rounded-full hover:bg-muted"
-                  >
-                    <X className="h-3 w-3" />
-                    <span className="sr-only">Remove {tag} tag</span>
-                  </button>
-                </Badge>
-              ))}
-            </div>
-            <div className="flex gap-2">
+            
+            <div>
+              <Label htmlFor="description" className="text-xs font-medium">Description</Label>
               <Input
-                id="tags"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleTagKeyDown}
-                placeholder="Add tags (press Enter)"
-                className="flex-1"
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What did you spend on?"
+                className="mt-1 h-9"
               />
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="icon" 
-                onClick={handleAddTag}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
+              {errors.description && <p className="text-xs text-red-500 mt-1">{errors.description}</p>}
             </div>
-          </div>
-          
-          <div className="border border-dashed rounded-md p-4">
-            <Label htmlFor="receipt" className="text-sm font-medium mb-2 block">Upload Receipt</Label>
-            <div className="flex flex-col items-center justify-center gap-2">
-              {receiptImage ? (
-                <div className="relative w-full">
-                  <Image 
-                    src={receiptImage} 
-                    alt="Receipt" 
-                    className="max-h-40 object-contain mx-auto rounded-md" 
-                    width={500}
-                    height={300}
+            
+            <div>
+              <Label htmlFor="category" className="text-xs font-medium">Category</Label>
+              <div className="flex gap-2 mt-1">
+                <Select 
+                  value={category} 
+                  onValueChange={(value: string) => setCategory(value as ExpenseCategory)}
+                >
+                  <SelectTrigger className="flex-1 h-9">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {localCategories.map((cat: ExpenseCategoryType) => (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  className="shrink-0 h-9 w-9"
+                  onClick={() => setCategoryDialogOpen(true)}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+              {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
+            </div>
+            
+            {/* Optional Fields - Compact Layout */}
+            <div className="space-y-2">
+              <div>
+                <Label htmlFor="location" className="text-xs font-medium">Location (optional)</Label>
+                <Input
+                  id="location"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Enter location"
+                  className="mt-1 h-9"
+                  maxLength={100}
+                />
+                {errors.location && <p className="text-xs text-red-500 mt-1">{errors.location}</p>}
+              </div>
+              
+              <div>
+                <Label htmlFor="tags" className="text-xs font-medium">Tags</Label>
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1 mb-2">
+                    {tags.map((tag) => (
+                      <Badge key={tag} variant="secondary" className="text-xs h-6 flex items-center gap-1">
+                        {tag}
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveTag(tag)}
+                          className="rounded-full hover:bg-muted"
+                        >
+                          <X className="h-2 w-2" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Input
+                    id="tags"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleTagKeyDown}
+                    placeholder="Add tags (press Enter)"
+                    className="flex-1 h-9"
+                    maxLength={20}
+                    disabled={tags.length >= 10}
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-2 mx-auto flex"
-                    onClick={() => setReceiptImage(null)}
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-9 w-9"
+                    onClick={handleAddTag}
+                    disabled={tags.length >= 10}
                   >
-                    Remove
+                    <Plus className="h-3 w-3" />
                   </Button>
                 </div>
-              ) : (
-                <div className="w-full">
-                  <div className="flex items-center justify-center py-3 border-2 border-dashed rounded-md">
+                {errors.tags && <p className="text-xs text-red-500 mt-1">{errors.tags}</p>}
+              </div>
+              
+              <div className="border border-dashed rounded-md p-3">
+                <Label htmlFor="receipt" className="text-xs font-medium mb-2 block">Receipt (optional)</Label>
+                {receiptImage ? (
+                  <div className="relative">
+                    <Image 
+                      src={receiptImage} 
+                      alt="Receipt" 
+                      className="max-h-24 object-contain mx-auto rounded" 
+                      width={200}
+                      height={100}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-1 w-full h-7 text-xs"
+                      onClick={() => setReceiptImage(null)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
                     <label 
                       htmlFor="receipt-upload" 
-                      className="flex flex-col items-center justify-center cursor-pointer"
+                      className="flex items-center justify-center py-2 border border-dashed rounded cursor-pointer hover:bg-muted/50"
                     >
-                      <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                      <span className="text-sm text-muted-foreground">
-                        Click to upload receipt
-                      </span>
+                      <Upload className="h-4 w-4 text-muted-foreground mr-2" />
+                      <span className="text-xs text-muted-foreground">Upload receipt</span>
                       <input
                         id="receipt-upload"
                         type="file"
@@ -363,28 +420,26 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                       />
                     </label>
                   </div>
-                  <p className="text-xs text-center text-muted-foreground mt-2">
-                    Upload a receipt to automatically extract expense details
-                  </p>
-                </div>
-              )}
-              
-              {isAnalyzing && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Analyzing receipt...</span>
-                </div>
-              )}
+                )}
+                
+                {isAnalyzing && (
+                  <div className="flex items-center gap-2 text-xs mt-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Analyzing...</span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          
-          <Button 
-            type="submit" 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2"
-          >
-            {submitButtonText}
-          </Button>
-        </form>
+            
+            <Button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="w-full h-9 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50"
+            >
+              {isSubmitting ? "Saving..." : submitButtonText}
+            </Button>
+          </form>
+        </div>
         
         <CategoryDialog 
           open={categoryDialogOpen}

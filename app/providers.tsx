@@ -2,12 +2,10 @@
 
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/lib/auth/AuthContext";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { Toaster } from 'react-hot-toast';
+import { Toaster } from 'sonner';
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
   const [isFirebaseReady, setIsFirebaseReady] = useState(false);
 
   useEffect(() => {
@@ -20,23 +18,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
-          <Toaster 
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: 'var(--background)',
-                color: 'var(--foreground)',
-                border: '1px solid var(--border)'
-              },
-            }}
-          />
-        </ThemeProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <AuthProvider>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        {children}
+        <Toaster richColors />
+      </ThemeProvider>
+    </AuthProvider>
   );
 } 

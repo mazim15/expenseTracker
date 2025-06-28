@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { ExpenseType, ExpenseCategoryType, EXPENSE_CATEGORIES } from "@/types/expense";
-import { getExpenses, addExpense, updateExpense, deleteExpense } from "@/lib/expenses";
+import { getAllExpenses, addExpense, updateExpense, deleteExpense } from "@/lib/expenses";
+import { handleError, showSuccessMessage } from "@/lib/utils/errorHandler";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Tags, Download, Upload, Loader2 } from "lucide-react";
+import { Plus, Search, Tags, Download, Upload, Loader2, Filter, SortAsc } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import ExpenseList from "@/components/expenses/ExpenseList";
@@ -13,17 +14,23 @@ import ExpenseDialog from "@/components/expenses/ExpenseDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { exportExpensesToCSV } from "@/lib/utils/exportData";
-import { ExpenseListSkeleton } from "@/components/ui/loading-skeleton";
 import DeleteConfirmDialog from "@/components/expenses/DeleteConfirmDialog";
 import { useSearchParams, useRouter } from "next/navigation";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import ReceiptReviewDialog from "@/components/expenses/ReceiptReviewDialog";
 import { fileToBase64, analyzeReceipt } from "@/lib/utils/receiptAnalysis";
+import { getUserCategories } from "@/lib/categories";
+import { motion, AnimatePresence } from "framer-motion";
+import { PageTransition, StaggerContainer, StaggerItem } from "@/components/ui/page-transition";
+import { EnhancedLoading } from "@/components/ui/enhanced-loading";
 
 export default function ExpensesPage() {
   const { user } = useAuth();
-  const [expenses, setExpenses] = useState<ExpenseType[]>([]);
+  const [allExpenses, setAllExpenses] = useState<ExpenseType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalFilteredCount, setTotalFilteredCount] = useState(0);
+  const ITEMS_PER_PAGE = 30;
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseType | null>(null);
   const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
@@ -32,13 +39,7 @@ export default function ExpensesPage() {
   const [dateFilter, setDateFilter] = useState("all");
   const [filteredExpenses, setFilteredExpenses] = useState<ExpenseType[]>([]);
   const [sortBy, setSortBy] = useState("date-desc");
-  const [categories] = useState(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("expense-categories");
-      return stored ? JSON.parse(stored) : EXPENSE_CATEGORIES;
-    }
-    return EXPENSE_CATEGORIES;
-  });
+  const [categories, setCategories] = useState(EXPENSE_CATEGORIES);
   
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -69,14 +70,20 @@ export default function ExpensesPage() {
     }
   }, []);
 
-  const filterExpenses = useCallback(() => {
-    let filtered = [...expenses];
+  const filterAndPaginateExpenses = useCallback(() => {
+    if (!Array.isArray(allExpenses)) return;
+    let filtered = [...allExpenses];
     
-    // Filter by search term
+    // Filter by search term (search description, location, and tags)
     if (searchTerm) {
-      filtered = filtered.filter(expense => 
-        expense.description.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(expense => {
+        const descriptionMatch = expense.description.toLowerCase().includes(searchLower);
+        const locationMatch = expense.location?.toLowerCase().includes(searchLower) || false;
+        const tagsMatch = expense.tags?.some(tag => tag.toLowerCase().includes(searchLower)) || false;
+        
+        return descriptionMatch || locationMatch || tagsMatch;
+      });
     }
     
     // Filter by category
@@ -101,19 +108,25 @@ export default function ExpensesPage() {
     
     // Sort expenses
     const sortedExpenses = sortExpenses(filtered, sortBy);
-    setFilteredExpenses(sortedExpenses);
-  }, [expenses, searchTerm, categoryFilter, dateFilter, sortBy, sortExpenses]);
+    
+    // Paginate the filtered and sorted results
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedExpenses = sortedExpenses.slice(startIndex, endIndex);
+    
+    setFilteredExpenses(paginatedExpenses);
+    setTotalFilteredCount(sortedExpenses.length);
+  }, [allExpenses, searchTerm, categoryFilter, dateFilter, sortBy, currentPage, ITEMS_PER_PAGE, sortExpenses]);
 
   const fetchExpenses = useCallback(async () => {
     if (!user) return;
     
     try {
       setLoading(true);
-      const data = await getExpenses(user.uid);
-      setExpenses(data);
-      setFilteredExpenses(data);
+      const data = await getAllExpenses(user.uid);
+      setAllExpenses(data);
     } catch (error) {
-      console.error("Error fetching expenses:", error);
+      handleError(error, 'Expenses page - fetching expenses');
     } finally {
       setLoading(false);
     }
@@ -125,21 +138,50 @@ export default function ExpensesPage() {
     }
   }, [searchParams]);
   
+  const fetchCategories = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      const userCategories = await getUserCategories(user.uid);
+      if (userCategories && userCategories.length > 0) {
+        setCategories(userCategories);
+        localStorage.setItem("expense-categories", JSON.stringify(userCategories));
+      } else {
+        // Check localStorage for cached categories
+        const storedCategories = localStorage.getItem("expense-categories");
+        if (storedCategories) {
+          try {
+            setCategories(JSON.parse(storedCategories));
+          } catch (error) {
+            console.error("Error parsing stored categories:", error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       fetchExpenses();
+      fetchCategories();
     }
-  }, [user, fetchExpenses]);
+  }, [user, fetchExpenses, fetchCategories]);
   
   useEffect(() => {
-    filterExpenses();
-  }, [expenses, searchTerm, categoryFilter, dateFilter, sortBy, filterExpenses]);
+    filterAndPaginateExpenses();
+  }, [filterAndPaginateExpenses]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, categoryFilter, dateFilter, sortBy]);
 
   const handleAddExpense = async (expenseData: Omit<ExpenseType, "id" | "createdAt" | "updatedAt">) => {
     if (!user) return;
 
     try {
-      // Include userId in the expense data
       const expenseWithUser = {
         ...expenseData,
         userId: user.uid
@@ -148,25 +190,19 @@ export default function ExpensesPage() {
       await fetchExpenses();
       setIsAddDialogOpen(false);
       router.replace("/expenses");
-      toast.success("Expense added successfully");
+      showSuccessMessage("Expense added successfully");
     } catch (error) {
-      console.error("Error adding expense:", error);
-      toast.error("Failed to add expense");
+      handleError(error, 'Expenses page - adding expense');
     }
   };
   
   const handleEditExpense = async (updatedExpense: ExpenseType) => {
     try {
       await updateExpense(user!.uid, updatedExpense.id, updatedExpense);
-      // Refresh the expenses list
-      const updatedExpenses = expenses.map(exp => 
-        exp.id === updatedExpense.id ? updatedExpense : exp
-      );
-      setExpenses(updatedExpenses);
-      toast.success("Expense updated successfully");
+      await fetchExpenses();
+      showSuccessMessage("Expense updated successfully");
     } catch (error) {
-      console.error("Error updating expense:", error);
-      toast.error("Failed to update expense");
+      handleError(error, 'Expenses page - updating expense');
     }
   };
   
@@ -181,8 +217,11 @@ export default function ExpensesPage() {
       await deleteExpense(deleteExpenseId, user.uid);
       await fetchExpenses();
       setDeleteExpenseId(null);
+      showSuccessMessage("Expense deleted successfully");
     } catch (error) {
-      console.error("Error deleting expense:", error);
+      handleError(error, 'Expenses page - deleting expense');
+      // Keep the dialog open on error
+      throw error;
     }
   };
   
@@ -260,156 +299,337 @@ export default function ExpensesPage() {
       setDetectedExpenses([]);
       
       toast.dismiss();
-      toast.success(`${expenses.length} expenses added successfully`);
+      showSuccessMessage(`${expenses.length} expenses added successfully`);
     } catch (error) {
-      console.error("Error adding expenses:", error);
       toast.dismiss();
-      toast.error("Failed to add expenses");
+      handleError(error, 'Expenses page - adding bulk expenses');
     }
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="flex flex-col space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-primary/10 to-transparent p-6 rounded-lg">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Expenses</h1>
-            <p className="text-muted-foreground">Track and manage your spending</p>
-          </div>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline"
-              onClick={handleExportCSV}
-              disabled={filteredExpenses.length === 0}
-              className="shadow-sm"
+    <PageTransition>
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <StaggerContainer className="flex flex-col space-y-6">
+          <StaggerItem>
+            <motion.div 
+              className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 glassmorphism p-6 rounded-xl"
+              whileHover={{ scale: 1.01 }}
+              transition={{ type: "spring", stiffness: 300 }}
             >
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button onClick={() => setIsAddDialogOpen(true)} className="shadow-md hover:shadow-lg transition-all">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Expense
-              </Button>
-              <Button 
-                onClick={() => {
-                  // Create a file input element
-                  const fileInput = document.createElement('input');
-                  fileInput.type = 'file';
-                  fileInput.accept = 'image/*';
-                  fileInput.addEventListener('change', handleReceiptUpload);
-                  fileInput.click();
-                }} 
-                variant="outline"
-                className="shadow-sm"
-                disabled={isAnalyzing}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
               >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Scan Receipt
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search expenses..."
-              className="pl-10"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map((category: ExpenseCategoryType) => (
-                  <SelectItem key={category.value} value={category.value}>
-                    {category.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Time Period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="thisWeek">This Week</SelectItem>
-                <SelectItem value="thisMonth">This Month</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Sort By" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="date-desc">Newest First</SelectItem>
-                <SelectItem value="date-asc">Oldest First</SelectItem>
-                <SelectItem value="amount-desc">Highest Amount</SelectItem>
-                <SelectItem value="amount-asc">Lowest Amount</SelectItem>
-                <SelectItem value="category">Category</SelectItem>
-                <SelectItem value="description">Description</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Expenses</CardTitle>
-            <CardDescription>
-              {filteredExpenses.length > 0 
-                ? `Showing ${filteredExpenses.length} expense${filteredExpenses.length !== 1 ? 's' : ''}`
-                : 'No expenses found'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <ExpenseListSkeleton />
-            ) : filteredExpenses.length > 0 ? (
-              <ExpenseList 
-                expenses={filteredExpenses} 
-                onEdit={handleEditExpense} 
-                onDelete={handleDeleteClick} 
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="rounded-full bg-muted p-6 mb-4">
-                  <Tags className="h-10 w-10 text-muted-foreground" />
+                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+                  Expenses
+                </h1>
+                <p className="text-muted-foreground mt-1">Track and manage your spending</p>
+              </motion.div>
+              <motion.div 
+                className="flex gap-2"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Button 
+                    variant="outline"
+                    onClick={handleExportCSV}
+                    disabled={filteredExpenses.length === 0}
+                    className="shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    <motion.div
+                      animate={{ rotate: filteredExpenses.length > 0 ? [0, 10, -10, 0] : 0 }}
+                      transition={{ duration: 2, repeat: filteredExpenses.length > 0 ? Infinity : 0, repeatDelay: 3 }}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                    </motion.div>
+                    Export
+                  </Button>
+                </motion.div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button 
+                      onClick={() => setIsAddDialogOpen(true)} 
+                      className="shadow-lg hover:shadow-xl transition-all bg-primary text-primary-foreground"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Expense
+                    </Button>
+                  </motion.div>
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button 
+                      onClick={() => {
+                        const fileInput = document.createElement('input');
+                        fileInput.type = 'file';
+                        fileInput.accept = 'image/*';
+                        fileInput.addEventListener('change', handleReceiptUpload);
+                        fileInput.click();
+                      }} 
+                      variant="outline"
+                      className="shadow-lg hover:shadow-xl transition-all duration-200"
+                      disabled={isAnalyzing}
+                    >
+                      <AnimatePresence mode="wait">
+                        {isAnalyzing ? (
+                          <motion.div
+                            key="analyzing"
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            className="flex items-center"
+                          >
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                            >
+                              <Loader2 className="mr-2 h-4 w-4" />
+                            </motion.div>
+                            Analyzing...
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            key="upload"
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            className="flex items-center"
+                          >
+                            <Upload className="mr-2 h-4 w-4" />
+                            Scan Receipt
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </Button>
+                  </motion.div>
                 </div>
-                <h3 className="text-xl font-semibold mb-2">No expenses found</h3>
-                <p className="text-muted-foreground mb-6 max-w-md">
-                  {searchTerm || categoryFilter !== "all" || dateFilter !== "all"
-                    ? "Try adjusting your search or filter criteria"
-                    : "Add your first expense to start tracking your spending"}
-                </p>
-                <Button onClick={() => setIsAddDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Expense
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </motion.div>
+            </motion.div>
+          </StaggerItem>
+          
+          <StaggerItem>
+            <motion.div 
+              className="flex flex-col sm:flex-row gap-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <motion.div 
+                className="relative flex-1"
+                whileHover={{ scale: 1.02 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <motion.div
+                  animate={{ x: [0, 5, 0] }}
+                  transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                >
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </motion.div>
+                <Input
+                  placeholder="Search by description, location, or tags..."
+                  className="pl-10 glassmorphism border-0 shadow-lg"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </motion.div>
+              <motion.div 
+                className="flex flex-wrap gap-2"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <motion.div whileHover={{ scale: 1.05 }}>
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="w-[180px] glassmorphism border-0 shadow-lg">
+                      <Filter className="mr-2 h-4 w-4" />
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map((category: ExpenseCategoryType) => (
+                        <SelectItem key={category.value} value={category.value}>
+                          {category.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </motion.div>
+                
+                <motion.div whileHover={{ scale: 1.05 }}>
+                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger className="w-[180px] glassmorphism border-0 shadow-lg">
+                      <SelectValue placeholder="Time Period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Time</SelectItem>
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="thisWeek">This Week</SelectItem>
+                      <SelectItem value="thisMonth">This Month</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </motion.div>
+                
+                <motion.div whileHover={{ scale: 1.05 }}>
+                  <Select value={sortBy} onValueChange={setSortBy}>
+                    <SelectTrigger className="w-[180px] glassmorphism border-0 shadow-lg">
+                      <SortAsc className="mr-2 h-4 w-4" />
+                      <SelectValue placeholder="Sort By" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="date-desc">Newest First</SelectItem>
+                      <SelectItem value="date-asc">Oldest First</SelectItem>
+                      <SelectItem value="amount-desc">Highest Amount</SelectItem>
+                      <SelectItem value="amount-asc">Lowest Amount</SelectItem>
+                      <SelectItem value="category">Category</SelectItem>
+                      <SelectItem value="description">Description</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </motion.div>
+              </motion.div>
+            </motion.div>
+          </StaggerItem>
+          
+          <StaggerItem>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <Card className="glassmorphism border-0 shadow-xl hover:shadow-2xl transition-all duration-300">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    Your Expenses
+                    <motion.div
+                      animate={{ scale: [1, 1.2, 1] }}
+                      transition={{ duration: 2, repeat: Infinity, repeatDelay: 4 }}
+                    >
+                      <Tags className="h-5 w-5 text-primary" />
+                    </motion.div>
+                  </CardTitle>
+                  <CardDescription>
+                    {totalFilteredCount > 0 
+                      ? `Showing ${Math.min(filteredExpenses.length, ITEMS_PER_PAGE)} of ${totalFilteredCount} expense${totalFilteredCount !== 1 ? 's' : ''} (Page ${currentPage} of ${Math.ceil(totalFilteredCount / ITEMS_PER_PAGE)})`
+                      : 'No expenses found'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <AnimatePresence mode="wait">
+                    {loading ? (
+                      <motion.div
+                        key="loading"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                      >
+                        <EnhancedLoading message="Loading expenses..." variant="dots" />
+                      </motion.div>
+                    ) : filteredExpenses.length > 0 ? (
+                      <motion.div 
+                        key="expenses"
+                        className="space-y-4"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <ExpenseList 
+                          expenses={filteredExpenses} 
+                          onEdit={handleEditExpense} 
+                          onDelete={handleDeleteClick} 
+                        />
+                        {totalFilteredCount > ITEMS_PER_PAGE && (
+                          <motion.div 
+                            className="flex justify-center items-center gap-2 mt-4"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2 }}
+                          >
+                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                              <Button
+                                variant="outline"
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                                size="sm"
+                                className="shadow-lg"
+                              >
+                                Previous
+                              </Button>
+                            </motion.div>
+                            <span className="text-sm text-muted-foreground px-4">
+                              Page {currentPage} of {Math.ceil(totalFilteredCount / ITEMS_PER_PAGE)}
+                            </span>
+                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                              <Button
+                                variant="outline"
+                                onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalFilteredCount / ITEMS_PER_PAGE), prev + 1))}
+                                disabled={currentPage >= Math.ceil(totalFilteredCount / ITEMS_PER_PAGE)}
+                                size="sm"
+                                className="shadow-lg"
+                              >
+                                Next
+                              </Button>
+                            </motion.div>
+                          </motion.div>
+                        )}
+                      </motion.div>
+                    ) : (
+                      <motion.div 
+                        key="empty"
+                        className="flex flex-col items-center justify-center py-12 text-center"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <motion.div 
+                          className="rounded-full bg-muted p-6 mb-4"
+                          animate={{ rotate: [0, 10, -10, 0] }}
+                          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          <Tags className="h-10 w-10 text-muted-foreground" />
+                        </motion.div>
+                        <motion.h3 
+                          className="text-xl font-semibold mb-2"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.2 }}
+                        >
+                          No expenses found
+                        </motion.h3>
+                        <motion.p 
+                          className="text-muted-foreground mb-6 max-w-md"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.3 }}
+                        >
+                          {searchTerm || categoryFilter !== "all" || dateFilter !== "all"
+                            ? "Try adjusting your search or filter criteria"
+                            : "Add your first expense to start tracking your spending"}
+                        </motion.p>
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.4 }}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <Button 
+                            onClick={() => setIsAddDialogOpen(true)}
+                            className="bg-primary text-primary-foreground shadow-lg"
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add Expense
+                          </Button>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </StaggerItem>
+        </StaggerContainer>
       </div>
       
       <ExpenseDialog
@@ -446,6 +666,6 @@ export default function ExpensesPage() {
           setDetectedExpenses([]);
         }}
       />
-    </div>
+    </PageTransition>
   );
 }

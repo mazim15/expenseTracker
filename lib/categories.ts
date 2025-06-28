@@ -1,16 +1,12 @@
 import { 
-  collection, 
-  getDocs, 
   setDoc,
   getDoc,
   doc, 
-  query,
-  where,
   Timestamp 
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ExpenseCategoryType } from "@/types/expense";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 
 // Get categories for a user
 export async function getUserCategories(userId: string): Promise<ExpenseCategoryType[]> {

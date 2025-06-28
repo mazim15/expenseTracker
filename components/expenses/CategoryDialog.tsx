@@ -9,7 +9,7 @@ import { X, Plus, Save } from "lucide-react";
 import { EXPENSE_CATEGORIES, ExpenseCategoryType, updateExpenseCategories } from "@/types/expense";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { saveUserCategories } from "@/lib/categories";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 
 type CategoryDialogProps = {
   open: boolean;
