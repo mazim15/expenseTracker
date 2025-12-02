@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { useSettings } from "@/lib/contexts/SettingsContext";
 import { User } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,8 +13,9 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { AlertCircle, Check } from "lucide-react";
+import { AlertCircle, Check, Brain } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AIService } from "@/lib/ai";
 
 interface UserProfileUpdate {
   displayName?: string | null;
@@ -22,30 +24,26 @@ interface UserProfileUpdate {
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
+  const { settings, updateSettings } = useSettings();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
-  const [currency, setCurrency] = useState("PKR");
-  const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
+  
+  const aiService = AIService.getInstance();
+  const isAIAvailable = aiService.isAIEnabled();
+
+  // Debug logging
+  console.log('Settings:', settings);
+  console.log('AI Available:', isAIAvailable);
   
   useEffect(() => {
     if (user) {
       const firebaseUser = user as User;
       setDisplayName(firebaseUser.displayName || "");
       setEmail(firebaseUser.email || "");
-      
-      // Load user settings from localStorage or database
-      const savedSettings = localStorage.getItem("userSettings");
-      if (savedSettings) {
-        const settings = JSON.parse(savedSettings);
-        setCurrency(settings.currency || "PKR");
-        setNotifications(settings.notifications !== false);
-        setDarkMode(settings.darkMode || false);
-      }
     }
   }, [user]);
   
@@ -82,23 +80,8 @@ export default function SettingsPage() {
       setError("");
       setSuccess("");
       
-      const settings = { currency, notifications, darkMode };
-      
-      // Save to localStorage for demo purposes
-      localStorage.setItem("userSettings", JSON.stringify(settings));
-      
-      // In a real app, you would save to your database
-      // await updateUserSettings(user.uid, settings);
-      
       setSuccess("Settings updated successfully");
       setTimeout(() => setSuccess(""), 3000);
-      
-      // Apply dark mode
-      if (darkMode) {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
     } catch (err: Error | unknown) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
       setError(errorMessage);
@@ -129,6 +112,7 @@ export default function SettingsPage() {
           <TabsList>
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
+            <TabsTrigger value="ai">AI Features</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
           
@@ -221,7 +205,7 @@ export default function SettingsPage() {
                 
                 <div className="space-y-2">
                   <Label htmlFor="currency">Currency</Label>
-                  <Select value={currency} onValueChange={setCurrency}>
+                  <Select value={settings.currency} onValueChange={(value) => updateSettings({ currency: value })}>
                     <SelectTrigger id="currency">
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
@@ -247,8 +231,8 @@ export default function SettingsPage() {
                   </div>
                   <Switch
                     id="notifications"
-                    checked={notifications}
-                    onCheckedChange={setNotifications}
+                    checked={settings.notifications}
+                    onCheckedChange={(checked) => updateSettings({ notifications: checked })}
                   />
                 </div>
                 
@@ -263,14 +247,104 @@ export default function SettingsPage() {
                   </div>
                   <Switch
                     id="darkMode"
-                    checked={darkMode}
-                    onCheckedChange={setDarkMode}
+                    checked={settings.darkMode}
+                    onCheckedChange={(checked) => updateSettings({ darkMode: checked })}
                   />
                 </div>
                 
                 <div className="flex justify-end">
                   <Button onClick={handleSettingsUpdate} disabled={loading}>
                     {loading ? "Saving..." : "Save Preferences"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="ai" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-primary" />
+                  AI Features
+                </CardTitle>
+                <CardDescription>
+                  Configure AI-powered features for better expense management
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {!isAIAvailable && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      AI features are not available. Please configure your Gemini API key to enable intelligent expense analysis.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
+                {success && (
+                  <Alert className="mb-4 border-green-500 text-green-700">
+                    <Check className="h-4 w-4" />
+                    <AlertDescription>{success}</AlertDescription>
+                  </Alert>
+                )}
+                
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="autoCategorizationEnabled">Smart Auto-Categorization</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Automatically suggest categories for new expenses based on description and your spending history
+                    </p>
+                  </div>
+                  <Switch
+                    id="autoCategorizationEnabled"
+                    checked={settings.autoCategorizationEnabled}
+                    onCheckedChange={(checked) => updateSettings({ autoCategorizationEnabled: checked })}
+                    disabled={!isAIAvailable}
+                  />
+                </div>
+                
+                <Separator />
+                
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="aiInsightsEnabled">AI Insights</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Generate intelligent spending insights, anomaly detection, and personalized recommendations
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Current: {settings.aiInsightsEnabled ? 'ON' : 'OFF'} | API Available: {isAIAvailable ? 'YES' : 'NO'}
+                    </p>
+                  </div>
+                  <Switch
+                    id="aiInsightsEnabled"
+                    checked={settings.aiInsightsEnabled}
+                    onCheckedChange={(checked) => {
+                      console.log('Toggle clicked:', checked);
+                      updateSettings({ aiInsightsEnabled: checked });
+                    }}
+                    disabled={!isAIAvailable}
+                  />
+                </div>
+                
+                <Separator />
+                
+                <div className="rounded-lg border p-4 bg-muted/30">
+                  <h4 className="text-sm font-medium mb-2">Available AI Features:</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Smart expense categorization with learning from your habits</li>
+                    <li>• Spending pattern analysis and trend detection</li>
+                    <li>• Anomaly detection for unusual transactions</li>
+                    <li>• Personalized budget recommendations</li>
+                    <li>• Natural language spending insights</li>
+                    <li>• Financial health scoring</li>
+                    <li>• Savings opportunity identification</li>
+                  </ul>
+                </div>
+                
+                <div className="flex justify-end">
+                  <Button onClick={handleSettingsUpdate} disabled={loading || !isAIAvailable}>
+                    {loading ? "Saving..." : "Save AI Settings"}
                   </Button>
                 </div>
               </CardContent>

@@ -1,18 +1,42 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { ExpenseType, ExpenseCategoryType, EXPENSE_CATEGORIES } from "@/types/expense";
 import { getAllExpenses, addExpense, updateExpense, deleteExpense } from "@/lib/expenses";
 import { handleError, showSuccessMessage } from "@/lib/utils/errorHandler";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Tags, Download, Upload, Loader2, Filter, SortAsc } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Plus,
+  Search,
+  Tags,
+  Download,
+  Upload,
+  Loader2,
+  Filter,
+  SortAsc,
+  Calendar,
+  DollarSign,
+  TrendingUp,
+  BarChart3,
+  Grid3X3,
+  List,
+  RefreshCw,
+  Trash2,
+  X,
+  Clock,
+  Target,
+  Zap
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ExpenseList from "@/components/expenses/ExpenseList";
 import ExpenseDialog from "@/components/expenses/ExpenseDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { exportExpensesToCSV } from "@/lib/utils/exportData";
 import DeleteConfirmDialog from "@/components/expenses/DeleteConfirmDialog";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -21,33 +45,105 @@ import ReceiptReviewDialog from "@/components/expenses/ReceiptReviewDialog";
 import { fileToBase64, analyzeReceipt } from "@/lib/utils/receiptAnalysis";
 import { getUserCategories } from "@/lib/categories";
 import { motion, AnimatePresence } from "framer-motion";
-import { PageTransition, StaggerContainer, StaggerItem } from "@/components/ui/page-transition";
+import { PageTransition, StaggerContainer, StaggerItem, ScaleIn } from "@/components/ui/page-transition";
 import { EnhancedLoading } from "@/components/ui/enhanced-loading";
+import { useLogger } from "@/lib/hooks/useLogger";
+import { formatCurrency } from "@/lib/utils";
 
 export default function ExpensesPage() {
   const { user } = useAuth();
+  const { logAction } = useLogger();
+  
+  // Core state
   const [allExpenses, setAllExpenses] = useState<ExpenseType[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalFilteredCount, setTotalFilteredCount] = useState(0);
-  const ITEMS_PER_PAGE = 30;
+  const ITEMS_PER_PAGE = 20; // Reduced for better performance
+  
+  // Dialog states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseType | null>(null);
   const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
+  
+  // Filter and search states
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
-  const [filteredExpenses, setFilteredExpenses] = useState<ExpenseType[]>([]);
   const [sortBy, setSortBy] = useState("date-desc");
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  
+  // Advanced features
+  const [selectedExpenses, setSelectedExpenses] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState("all");
+  
+  const [filteredExpenses, setFilteredExpenses] = useState<ExpenseType[]>([]);
   const [categories, setCategories] = useState(EXPENSE_CATEGORIES);
   
   const searchParams = useSearchParams();
   const router = useRouter();
   
+  // Receipt analysis
   const _receiptImage = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detectedExpenses, setDetectedExpenses] = useState<Partial<ExpenseType>[]>([]);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
+
+  // Enhanced analytics calculations
+  const analytics = useMemo(() => {
+    if (!allExpenses.length) return null;
+
+    const now = new Date();
+    const currentMonth = startOfMonth(now);
+    const previousMonth = startOfMonth(subMonths(now, 1));
+
+    // Filter by periods
+    const currentMonthExpenses = allExpenses.filter(expense => 
+      expense.date >= currentMonth && expense.date <= endOfMonth(currentMonth)
+    );
+    const previousMonthExpenses = allExpenses.filter(expense => 
+      expense.date >= previousMonth && expense.date <= endOfMonth(previousMonth)
+    );
+
+    // Calculate totals
+    const currentTotal = currentMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const previousTotal = previousMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const totalAmount = allExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    
+    // Growth calculation
+    const growth = previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal) * 100 : 0;
+
+    // Category breakdown
+    const categoryTotals: Record<string, number> = {};
+    allExpenses.forEach(expense => {
+      categoryTotals[expense.category] = (categoryTotals[expense.category] || 0) + expense.amount;
+    });
+
+    const topCategory = Object.entries(categoryTotals)
+      .sort(([,a], [,b]) => b - a)[0];
+
+    return {
+      totalExpenses: allExpenses.length,
+      totalAmount,
+      currentMonth: {
+        total: currentTotal,
+        count: currentMonthExpenses.length
+      },
+      previousMonth: {
+        total: previousTotal,
+        count: previousMonthExpenses.length
+      },
+      growth: {
+        percentage: growth,
+        isIncrease: growth > 0
+      },
+      averageExpense: allExpenses.length > 0 ? totalAmount / allExpenses.length : 0,
+      topCategory: topCategory ? {
+        name: EXPENSE_CATEGORIES.find(c => c.value === topCategory[0])?.label || topCategory[0],
+        amount: topCategory[1]
+      } : null
+    };
+  }, [allExpenses]);
   
   const sortExpenses = useCallback((expenses: ExpenseType[], sortBy: string): ExpenseType[] => {
     const sorted = [...expenses];
@@ -125,18 +221,72 @@ export default function ExpensesPage() {
       setLoading(true);
       const data = await getAllExpenses(user.uid);
       setAllExpenses(data);
+      
+      // Log page visit
+      logAction('expenses_page_loaded', { 
+        count: data.length,
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
       handleError(error, 'Expenses page - fetching expenses');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, logAction]);
+
+
+  // Bulk operations
+  const handleBulkDelete = useCallback(async () => {
+    if (!user || selectedExpenses.length === 0) return;
+    
+    try {
+      for (const expenseId of selectedExpenses) {
+        await deleteExpense(expenseId, user.uid);
+      }
+      await fetchExpenses();
+      setSelectedExpenses([]);
+      showSuccessMessage(`${selectedExpenses.length} expenses deleted successfully`);
+      
+      logAction('bulk_delete_expenses', { 
+        count: selectedExpenses.length,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      handleError(error, 'Bulk delete expenses');
+    }
+  }, [user, selectedExpenses, fetchExpenses, logAction]);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedExpenses.length === filteredExpenses.length) {
+      setSelectedExpenses([]);
+    } else {
+      setSelectedExpenses(filteredExpenses.map(expense => expense.id));
+    }
+  }, [selectedExpenses.length, filteredExpenses]);
+
+  const toggleExpenseSelection = useCallback((expenseId: string) => {
+    setSelectedExpenses(prev => 
+      prev.includes(expenseId) 
+        ? prev.filter(id => id !== expenseId)
+        : [...prev, expenseId]
+    );
+  }, []);
 
   useEffect(() => {
     if (searchParams.get("add") === "true") {
       setIsAddDialogOpen(true);
     }
-  }, [searchParams]);
+    
+    // Handle search parameter from header quick search
+    const searchParam = searchParams.get("search");
+    if (searchParam) {
+      setSearchTerm(searchParam);
+      // Clear the URL parameter to avoid cluttering
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete("search");
+      router.replace(`/expenses${newParams.toString() ? '?' + newParams.toString() : ''}`);
+    }
+  }, [searchParams, router]);
   
   const fetchCategories = useCallback(async () => {
     if (!user) return;
@@ -309,139 +459,266 @@ export default function ExpensesPage() {
   return (
     <PageTransition>
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <StaggerContainer className="flex flex-col space-y-6">
+        <StaggerContainer className="flex flex-col space-y-8">
+          {/* Enhanced Header Section */}
           <StaggerItem>
             <motion.div 
-              className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 glassmorphism p-6 rounded-xl"
-              whileHover={{ scale: 1.01 }}
-              transition={{ type: "spring", stiffness: 300 }}
+              className="relative overflow-hidden"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
             >
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-              >
-                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
-                  Expenses
-                </h1>
-                <p className="text-muted-foreground mt-1">Track and manage your spending</p>
-              </motion.div>
-              <motion.div 
-                className="flex gap-2"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-emerald-500/10 opacity-50" />
+              <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 bg-gradient-to-r from-background/80 via-background/90 to-background/80 backdrop-blur-sm p-8 rounded-2xl border shadow-lg">
+                <div>
+                  <h1 className="text-5xl font-bold tracking-tight bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-600 bg-clip-text text-transparent">
+                    Expenses Manager
+                  </h1>
+                  <p className="text-muted-foreground mt-3 text-lg max-w-2xl">
+                    Track, analyze, and manage your spending with advanced tools and insights
+                  </p>
+                  {analytics && (
+                    <div className="flex gap-4 mt-4">
+                      <Badge variant="secondary" className="text-blue-600 bg-blue-100 dark:bg-blue-900/30">
+                        {analytics.totalExpenses} Total Expenses
+                      </Badge>
+                      <Badge variant="secondary" className="text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30">
+                        {formatCurrency(analytics.totalAmount)} Total Amount
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <Button onClick={fetchExpenses} variant="outline" disabled={loading} className="group">
+                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+                    Refresh
+                  </Button>
                   <Button 
                     variant="outline"
                     onClick={handleExportCSV}
                     disabled={filteredExpenses.length === 0}
-                    className="shadow-lg hover:shadow-xl transition-all duration-200"
+                    className="group"
                   >
-                    <motion.div
-                      animate={{ rotate: filteredExpenses.length > 0 ? [0, 10, -10, 0] : 0 }}
-                      transition={{ duration: 2, repeat: filteredExpenses.length > 0 ? Infinity : 0, repeatDelay: 3 }}
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                    </motion.div>
+                    <Download className="h-4 w-4 mr-2 group-hover:translate-y-0.5 transition-transform" />
                     Export
                   </Button>
-                </motion.div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                    <Button 
-                      onClick={() => setIsAddDialogOpen(true)} 
-                      className="shadow-lg hover:shadow-xl transition-all bg-primary text-primary-foreground"
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Expense
-                    </Button>
-                  </motion.div>
-                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                    <Button 
-                      onClick={() => {
-                        const fileInput = document.createElement('input');
-                        fileInput.type = 'file';
-                        fileInput.accept = 'image/*';
-                        fileInput.addEventListener('change', handleReceiptUpload);
-                        fileInput.click();
-                      }} 
-                      variant="outline"
-                      className="shadow-lg hover:shadow-xl transition-all duration-200"
-                      disabled={isAnalyzing}
-                    >
-                      <AnimatePresence mode="wait">
-                        {isAnalyzing ? (
-                          <motion.div
-                            key="analyzing"
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            className="flex items-center"
-                          >
-                            <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                            >
-                              <Loader2 className="mr-2 h-4 w-4" />
-                            </motion.div>
-                            Analyzing...
-                          </motion.div>
-                        ) : (
-                          <motion.div
-                            key="upload"
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            className="flex items-center"
-                          >
-                            <Upload className="mr-2 h-4 w-4" />
-                            Scan Receipt
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </Button>
-                  </motion.div>
+                  <Button 
+                    onClick={() => {
+                      const fileInput = document.createElement('input');
+                      fileInput.type = 'file';
+                      fileInput.accept = 'image/*';
+                      fileInput.addEventListener('change', handleReceiptUpload);
+                      fileInput.click();
+                    }} 
+                    variant="outline"
+                    disabled={isAnalyzing}
+                    className="group"
+                  >
+                    <AnimatePresence mode="wait">
+                      {isAnalyzing ? (
+                        <motion.div
+                          key="analyzing"
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          className="flex items-center"
+                        >
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Analyzing...
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="upload"
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          className="flex items-center"
+                        >
+                          <Upload className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
+                          Scan Receipt
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </Button>
+                  <Button onClick={() => setIsAddDialogOpen(true)} className="group">
+                    <Plus className="h-4 w-4 mr-2 group-hover:rotate-90 transition-transform" />
+                    Add Expense
+                  </Button>
                 </div>
-              </motion.div>
+              </div>
             </motion.div>
           </StaggerItem>
-          
+
+          {/* Analytics Summary Cards */}
+          {analytics && (
+            <StaggerItem>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <ScaleIn delay={0.1}>
+                  <motion.div whileHover={{ y: -5 }} className="group">
+                    <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-50/80 via-white to-indigo-50/80 dark:from-blue-950/30 dark:via-background dark:to-indigo-950/30 shadow-lg hover:shadow-2xl transition-all duration-500">
+                      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <CardHeader className="relative z-10 pb-3">
+                        <CardTitle className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                          This Month
+                          <motion.div
+                            className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30"
+                            animate={{ rotate: [0, 5, -5, 0] }}
+                            transition={{ duration: 3, repeat: Infinity, repeatDelay: 4 }}
+                          >
+                            <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </motion.div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="relative z-10 space-y-2">
+                        <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                          {formatCurrency(analytics.currentMonth.total)}
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">{analytics.currentMonth.count} expenses</span>
+                          {analytics.growth.percentage !== 0 && (
+                            <Badge 
+                              variant="secondary" 
+                              className={analytics.growth.isIncrease ? 'text-red-600 bg-red-100' : 'text-green-600 bg-green-100'}
+                            >
+                              {analytics.growth.isIncrease ? '+' : ''}{analytics.growth.percentage.toFixed(1)}%
+                            </Badge>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </ScaleIn>
+
+                <ScaleIn delay={0.2}>
+                  <motion.div whileHover={{ y: -5 }} className="group">
+                    <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-50/80 via-white to-green-50/80 dark:from-emerald-950/30 dark:via-background dark:to-green-950/30 shadow-lg hover:shadow-2xl transition-all duration-500">
+                      <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-green-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <CardHeader className="relative z-10 pb-3">
+                        <CardTitle className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                          Average Expense
+                          <motion.div
+                            className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900/30"
+                            animate={{ scale: [1, 1.1, 1] }}
+                            transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                          >
+                            <BarChart3 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          </motion.div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="relative z-10 space-y-2">
+                        <div className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
+                          {formatCurrency(analytics.averageExpense)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Across {analytics.totalExpenses} transactions
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </ScaleIn>
+
+                <ScaleIn delay={0.3}>
+                  <motion.div whileHover={{ y: -5 }} className="group">
+                    <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-purple-50/80 via-white to-violet-50/80 dark:from-purple-950/30 dark:via-background dark:to-violet-950/30 shadow-lg hover:shadow-2xl transition-all duration-500">
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-violet-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <CardHeader className="relative z-10 pb-3">
+                        <CardTitle className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                          Top Category
+                          <motion.div
+                            className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/30"
+                            animate={{ rotate: [0, -10, 10, 0] }}
+                            transition={{ duration: 4, repeat: Infinity, repeatDelay: 2 }}
+                          >
+                            <Target className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                          </motion.div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="relative z-10 space-y-2">
+                        {analytics.topCategory ? (
+                          <>
+                            <div className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
+                              {formatCurrency(analytics.topCategory.amount)}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {analytics.topCategory.name}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-sm text-muted-foreground">No categories yet</div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </ScaleIn>
+
+                <ScaleIn delay={0.4}>
+                  <motion.div whileHover={{ y: -5 }} className="group">
+                    <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-orange-50/80 via-white to-amber-50/80 dark:from-orange-950/30 dark:via-background dark:to-amber-950/30 shadow-lg hover:shadow-2xl transition-all duration-500">
+                      <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <CardHeader className="relative z-10 pb-3">
+                        <CardTitle className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                          Activity Score
+                          <motion.div
+                            className="p-2 rounded-full bg-orange-100 dark:bg-orange-900/30"
+                            animate={{ 
+                              scale: [1, 1.2, 1],
+                              rotate: [0, 5, -5, 0]
+                            }}
+                            transition={{ duration: 3, repeat: Infinity, repeatDelay: 5 }}
+                          >
+                            <Zap className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                          </motion.div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="relative z-10 space-y-2">
+                        <div className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+                          {Math.min(100, Math.round((analytics.totalExpenses / 100) * 100))}%
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {analytics.totalExpenses > 50 ? 'Very Active' : analytics.totalExpenses > 20 ? 'Active' : 'Getting Started'}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </ScaleIn>
+              </div>
+            </StaggerItem>
+          )}
+
+          {/* Enhanced Search and Filter Section */}
           <StaggerItem>
             <motion.div 
-              className="flex flex-col sm:flex-row gap-4"
+              className="space-y-4"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
+              transition={{ delay: 0.3 }}
             >
-              <motion.div 
-                className="relative flex-1"
-                whileHover={{ scale: 1.02 }}
-                transition={{ type: "spring", stiffness: 300 }}
-              >
-                <motion.div
-                  animate={{ x: [0, 5, 0] }}
-                  transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
-                >
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                </motion.div>
+              {/* Main Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search by description, location, or tags..."
-                  className="pl-10 glassmorphism border-0 shadow-lg"
+                  placeholder="Search expenses by description, location, tags, or amount..."
+                  className="pl-12 h-14 text-lg bg-gradient-to-r from-background/80 to-background/90 backdrop-blur-sm border-0 shadow-lg"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-              </motion.div>
-              <motion.div 
-                className="flex flex-wrap gap-2"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.5 }}
-              >
-                <motion.div whileHover={{ scale: 1.05 }}>
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-2 top-1/2 -translate-y-1/2"
+                    onClick={() => setSearchTerm("")}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Filters and Options */}
+              <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                <div className="flex flex-wrap gap-3">
                   <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger className="w-[180px] glassmorphism border-0 shadow-lg">
+                    <SelectTrigger className="w-[180px] bg-background/80 backdrop-blur-sm border-0 shadow-lg">
                       <Filter className="mr-2 h-4 w-4" />
                       <SelectValue placeholder="Category" />
                     </SelectTrigger>
@@ -454,11 +731,10 @@ export default function ExpensesPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                </motion.div>
-                
-                <motion.div whileHover={{ scale: 1.05 }}>
+                  
                   <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger className="w-[180px] glassmorphism border-0 shadow-lg">
+                    <SelectTrigger className="w-[180px] bg-background/80 backdrop-blur-sm border-0 shadow-lg">
+                      <Calendar className="mr-2 h-4 w-4" />
                       <SelectValue placeholder="Time Period" />
                     </SelectTrigger>
                     <SelectContent>
@@ -468,11 +744,9 @@ export default function ExpensesPage() {
                       <SelectItem value="thisMonth">This Month</SelectItem>
                     </SelectContent>
                   </Select>
-                </motion.div>
-                
-                <motion.div whileHover={{ scale: 1.05 }}>
+                  
                   <Select value={sortBy} onValueChange={setSortBy}>
-                    <SelectTrigger className="w-[180px] glassmorphism border-0 shadow-lg">
+                    <SelectTrigger className="w-[180px] bg-background/80 backdrop-blur-sm border-0 shadow-lg">
                       <SortAsc className="mr-2 h-4 w-4" />
                       <SelectValue placeholder="Sort By" />
                     </SelectTrigger>
@@ -485,153 +759,258 @@ export default function ExpensesPage() {
                       <SelectItem value="description">Description</SelectItem>
                     </SelectContent>
                   </Select>
-                </motion.div>
-              </motion.div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* View Toggle */}
+                  <div className="flex items-center bg-background/80 backdrop-blur-sm rounded-lg p-1 shadow-lg">
+                    <Button
+                      variant={viewMode === "list" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("list")}
+                      className="h-8 px-3"
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === "grid" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("grid")}
+                      className="h-8 px-3"
+                    >
+                      <Grid3X3 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {/* Bulk Actions */}
+                  {selectedExpenses.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="flex items-center gap-2"
+                    >
+                      <Badge variant="secondary" className="text-primary">
+                        {selectedExpenses.length} selected
+                      </Badge>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleBulkDelete}
+                        className="h-8"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
             </motion.div>
           </StaggerItem>
           
+          {/* Enhanced Expenses Display */}
           <StaggerItem>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-            >
-              <Card className="glassmorphism border-0 shadow-xl hover:shadow-2xl transition-all duration-300">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    Your Expenses
-                    <motion.div
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ duration: 2, repeat: Infinity, repeatDelay: 4 }}
-                    >
-                      <Tags className="h-5 w-5 text-primary" />
-                    </motion.div>
-                  </CardTitle>
-                  <CardDescription>
-                    {totalFilteredCount > 0 
-                      ? `Showing ${Math.min(filteredExpenses.length, ITEMS_PER_PAGE)} of ${totalFilteredCount} expense${totalFilteredCount !== 1 ? 's' : ''} (Page ${currentPage} of ${Math.ceil(totalFilteredCount / ITEMS_PER_PAGE)})`
-                      : 'No expenses found'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <AnimatePresence mode="wait">
-                    {loading ? (
-                      <motion.div
-                        key="loading"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                      >
-                        <EnhancedLoading message="Loading expenses..." variant="dots" />
-                      </motion.div>
-                    ) : filteredExpenses.length > 0 ? (
-                      <motion.div 
-                        key="expenses"
-                        className="space-y-4"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <ExpenseList 
-                          expenses={filteredExpenses} 
-                          onEdit={handleEditExpense} 
-                          onDelete={handleDeleteClick} 
-                        />
-                        {totalFilteredCount > ITEMS_PER_PAGE && (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <TabsList className="grid w-full grid-cols-4 h-auto bg-background/80 backdrop-blur-sm shadow-lg">
+                  <TabsTrigger value="all" className="py-3 px-4 text-sm font-medium">
+                    <Tags className="h-4 w-4 mr-2" />
+                    All Expenses
+                  </TabsTrigger>
+                  <TabsTrigger value="recent" className="py-3 px-4 text-sm font-medium">
+                    <Clock className="h-4 w-4 mr-2" />
+                    Recent
+                  </TabsTrigger>
+                  <TabsTrigger value="month" className="py-3 px-4 text-sm font-medium">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    This Month
+                  </TabsTrigger>
+                  <TabsTrigger value="high" className="py-3 px-4 text-sm font-medium">
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    High Value
+                  </TabsTrigger>
+                </TabsList>
+              </motion.div>
+
+              <TabsContent value={activeTab} className="space-y-6">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <Card className="border-0 shadow-xl hover:shadow-2xl transition-all duration-500 bg-gradient-to-br from-background/95 to-background/90 backdrop-blur-sm">
+                    <CardHeader className="border-b bg-gradient-to-r from-muted/50 to-muted/30">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="flex items-center gap-3">
+                            <motion.div
+                              animate={{ scale: [1, 1.2, 1] }}
+                              transition={{ duration: 2, repeat: Infinity, repeatDelay: 4 }}
+                            >
+                              <DollarSign className="h-6 w-6 text-primary" />
+                            </motion.div>
+                            Your Expenses
+                          </CardTitle>
+                          <CardDescription>
+                            {totalFilteredCount > 0 
+                              ? `Showing ${Math.min(filteredExpenses.length, ITEMS_PER_PAGE)} of ${totalFilteredCount} expense${totalFilteredCount !== 1 ? 's' : ''} (Page ${currentPage} of ${Math.ceil(totalFilteredCount / ITEMS_PER_PAGE)})`
+                              : 'No expenses found'}
+                          </CardDescription>
+                        </div>
+                        {filteredExpenses.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={selectedExpenses.length === filteredExpenses.length}
+                              onChange={handleSelectAll}
+                            />
+                            <span className="text-sm text-muted-foreground">Select All</span>
+                          </div>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                      <AnimatePresence mode="wait">
+                        {loading ? (
+                          <motion.div
+                            key="loading"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="py-12"
+                          >
+                            <EnhancedLoading message="Loading your expenses..." variant="pulse" />
+                          </motion.div>
+                        ) : filteredExpenses.length > 0 ? (
                           <motion.div 
-                            className="flex justify-center items-center gap-2 mt-4"
+                            key="expenses"
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.2 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.3 }}
+                            className="space-y-6"
                           >
-                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                              <Button
-                                variant="outline"
-                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                disabled={currentPage === 1}
-                                size="sm"
-                                className="shadow-lg"
+                            <ExpenseList 
+                              expenses={filteredExpenses} 
+                              onEdit={handleEditExpense} 
+                              onDelete={handleDeleteClick}
+                              selectedExpenses={selectedExpenses}
+                              onToggleSelection={toggleExpenseSelection}
+                              viewMode={viewMode}
+                            />
+                            
+                            {totalFilteredCount > ITEMS_PER_PAGE && (
+                              <motion.div 
+                                className="flex justify-center items-center gap-4 pt-6 border-t"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 }}
                               >
-                                Previous
-                              </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                  disabled={currentPage === 1}
+                                  className="shadow-lg"
+                                >
+                                  Previous
+                                </Button>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-muted-foreground">
+                                    Page {currentPage} of {Math.ceil(totalFilteredCount / ITEMS_PER_PAGE)}
+                                  </span>
+                                  <Badge variant="outline">
+                                    {totalFilteredCount} total
+                                  </Badge>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalFilteredCount / ITEMS_PER_PAGE), prev + 1))}
+                                  disabled={currentPage >= Math.ceil(totalFilteredCount / ITEMS_PER_PAGE)}
+                                  className="shadow-lg"
+                                >
+                                  Next
+                                </Button>
+                              </motion.div>
+                            )}
+                          </motion.div>
+                        ) : (
+                          <motion.div 
+                            key="empty"
+                            className="flex flex-col items-center justify-center py-16 text-center"
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            transition={{ duration: 0.3 }}
+                          >
+                            <motion.div 
+                              className="rounded-full bg-gradient-to-br from-muted/50 to-muted p-8 mb-6"
+                              animate={{ rotate: [0, 10, -10, 0] }}
+                              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                            >
+                              <DollarSign className="h-12 w-12 text-muted-foreground" />
                             </motion.div>
-                            <span className="text-sm text-muted-foreground px-4">
-                              Page {currentPage} of {Math.ceil(totalFilteredCount / ITEMS_PER_PAGE)}
-                            </span>
-                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                              <Button
-                                variant="outline"
-                                onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalFilteredCount / ITEMS_PER_PAGE), prev + 1))}
-                                disabled={currentPage >= Math.ceil(totalFilteredCount / ITEMS_PER_PAGE)}
-                                size="sm"
+                            <motion.h3 
+                              className="text-2xl font-bold mb-3"
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.2 }}
+                            >
+                              No expenses found
+                            </motion.h3>
+                            <motion.p 
+                              className="text-muted-foreground mb-8 max-w-md text-lg"
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.3 }}
+                            >
+                              {searchTerm || categoryFilter !== "all" || dateFilter !== "all"
+                                ? "Try adjusting your search or filter criteria to find what you're looking for"
+                                : "Start your financial tracking journey by adding your first expense"}
+                            </motion.p>
+                            <motion.div
+                              className="flex gap-3"
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.4 }}
+                            >
+                              <Button 
+                                onClick={() => setIsAddDialogOpen(true)}
+                                size="lg"
                                 className="shadow-lg"
                               >
-                                Next
+                                <Plus className="mr-2 h-5 w-5" />
+                                Add Your First Expense
                               </Button>
+                              {(searchTerm || categoryFilter !== "all" || dateFilter !== "all") && (
+                                <Button 
+                                  onClick={() => {
+                                    setSearchTerm("");
+                                    setCategoryFilter("all");
+                                    setDateFilter("all");
+                                  }}
+                                  variant="outline"
+                                  size="lg"
+                                  className="shadow-lg"
+                                >
+                                  Clear Filters
+                                </Button>
+                              )}
                             </motion.div>
                           </motion.div>
                         )}
-                      </motion.div>
-                    ) : (
-                      <motion.div 
-                        key="empty"
-                        className="flex flex-col items-center justify-center py-12 text-center"
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <motion.div 
-                          className="rounded-full bg-muted p-6 mb-4"
-                          animate={{ rotate: [0, 10, -10, 0] }}
-                          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                        >
-                          <Tags className="h-10 w-10 text-muted-foreground" />
-                        </motion.div>
-                        <motion.h3 
-                          className="text-xl font-semibold mb-2"
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.2 }}
-                        >
-                          No expenses found
-                        </motion.h3>
-                        <motion.p 
-                          className="text-muted-foreground mb-6 max-w-md"
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.3 }}
-                        >
-                          {searchTerm || categoryFilter !== "all" || dateFilter !== "all"
-                            ? "Try adjusting your search or filter criteria"
-                            : "Add your first expense to start tracking your spending"}
-                        </motion.p>
-                        <motion.div
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.4 }}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          <Button 
-                            onClick={() => setIsAddDialogOpen(true)}
-                            className="bg-primary text-primary-foreground shadow-lg"
-                          >
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Expense
-                          </Button>
-                        </motion.div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </CardContent>
-              </Card>
-            </motion.div>
+                      </AnimatePresence>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </TabsContent>
+            </Tabs>
           </StaggerItem>
         </StaggerContainer>
       </div>
       
+      {/* Dialogs */}
       <ExpenseDialog
         open={isAddDialogOpen}
         onOpenChange={setIsAddDialogOpen}

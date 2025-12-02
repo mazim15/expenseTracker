@@ -16,6 +16,9 @@ interface CategoryPieChartProps {
 export default function CategoryPieChart({ data }: CategoryPieChartProps) {
   const tooltipFormatter = (value: number) => `${Number(value).toFixed(1)}%`;
 
+  // Debug log
+  console.log('CategoryPieChart data:', data);
+
   const legendFormatter = (value: string) => {
     const item = data.find(d => d.name === value);
     if (!item) return value;
@@ -24,8 +27,16 @@ export default function CategoryPieChart({ data }: CategoryPieChartProps) {
     return `${value} (${percent}%)`;
   };
 
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">No category data available</p>
+      </div>
+    );
+  }
+
   return (
-    <div role="img" aria-label="Expenses by category pie chart">
+    <div role="img" aria-label="Expenses by category pie chart" className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie

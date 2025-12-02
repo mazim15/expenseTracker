@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import Image from 'next/image';
 import { useAuth } from "@/lib/auth/AuthContext";
 import { getUserCategories } from "@/lib/categories";
+import { useLogger } from "@/lib/hooks/useLogger";
 
 type ExpenseDialogProps = {
   expense?: ExpenseType;
@@ -27,6 +28,7 @@ type ExpenseDialogProps = {
 
 export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: ExpenseDialogProps) {
   const { user } = useAuth();
+  const { logAction, logError, withActionLogging } = useLogger();
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [category, setCategory] = useState<ExpenseCategory>("food");
@@ -171,35 +173,66 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
     return Object.keys(newErrors).length === 0;
   };
   
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) return;
-    
-    const expenseData: ExpenseType = {
-      id: expense?.id || crypto.randomUUID(),
-      userId: expense?.userId || '',
-      tags: tags,
-      amount: parseFloat(amount),
-      date: new Date(date),
-      category: category,
-      description: description,
-      location: location || '',
-      createdAt: expense?.createdAt || new Date(),
-      updatedAt: new Date()
-    };
+  const handleSubmit = withActionLogging(
+    expense ? 'expense_edit' : 'expense_create',
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      
+      if (!validateForm()) {
+        await logAction('expense_validation_failed', {
+          hasAmount: !!amount,
+          hasDate: !!date,
+          hasCategory: !!category,
+          hasDescription: !!description.trim(),
+          errorCount: Object.keys(errors).length
+        });
+        return;
+      }
+      
+      const expenseData: ExpenseType = {
+        id: expense?.id || crypto.randomUUID(),
+        userId: expense?.userId || '',
+        tags: tags,
+        amount: parseFloat(amount),
+        date: new Date(date),
+        category: category,
+        description: description,
+        location: location || '',
+        createdAt: expense?.createdAt || new Date(),
+        updatedAt: new Date()
+      };
 
-    try {
-      setIsSubmitting(true);
-      await onSave(expenseData);
-      onOpenChange(false);
-    } catch (error) {
-      console.error('Error saving expense:', error);
-      toast.error('Failed to save expense');
-    } finally {
-      setIsSubmitting(false);
+      try {
+        setIsSubmitting(true);
+        await onSave(expenseData);
+        
+        await logAction(expense ? 'expense_updated' : 'expense_created', {
+          expenseId: expenseData.id,
+          amount: expenseData.amount,
+          category: expenseData.category,
+          hasLocation: !!expenseData.location,
+          tagCount: expenseData.tags?.length || 0
+        });
+        
+        onOpenChange(false);
+      } catch (error) {
+        await logError(error as Error, 'expense_save_failed', {
+          expenseId: expenseData.id,
+          isEdit: !!expense
+        });
+        toast.error('Failed to save expense');
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    {
+      isEdit: !!expense,
+      amount: parseFloat(amount) || 0,
+      category,
+      hasLocation: !!location,
+      tagCount: tags.length
     }
-  };
+  );
   
   const submitButtonText = expense ? "Save Changes" : "Add Expense";
 
@@ -211,7 +244,15 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
     const file = e.target.files?.[0];
     if (!file) return;
     
+    const startTime = Date.now();
+    
     try {
+      await logAction('receipt_upload_started', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      });
+      
       const base64Image = await fileToBase64(file);
       setReceiptImage(base64Image);
       
@@ -219,19 +260,53 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
       toast.loading("Analyzing receipt...");
       
       const extractedData = await analyzeReceipt(base64Image);
+      const duration = Date.now() - startTime;
       
       if (extractedData && extractedData.length > 0) {
         const firstItem = extractedData[0];
-        if (firstItem.amount) setAmount(firstItem.amount.toString());
-        if (firstItem.date) setDate(format(firstItem.date, "yyyy-MM-dd"));
-        if (firstItem.category) setCategory(firstItem.category);
-        if (firstItem.description) setDescription(firstItem.description);
+        const fieldsExtracted = [];
+        
+        if (firstItem.amount) {
+          setAmount(firstItem.amount.toString());
+          fieldsExtracted.push('amount');
+        }
+        if (firstItem.date) {
+          setDate(format(firstItem.date, "yyyy-MM-dd"));
+          fieldsExtracted.push('date');
+        }
+        if (firstItem.category) {
+          setCategory(firstItem.category);
+          fieldsExtracted.push('category');
+        }
+        if (firstItem.description) {
+          setDescription(firstItem.description);
+          fieldsExtracted.push('description');
+        }
+        
+        await logAction('receipt_analysis_successful', {
+          fileName: file.name,
+          fieldsExtracted,
+          extractedFieldCount: fieldsExtracted.length,
+          processingTime: duration
+        });
+      } else {
+        await logAction('receipt_analysis_no_data', {
+          fileName: file.name,
+          processingTime: duration
+        });
       }
       
       toast.dismiss();
       toast.success("Receipt analyzed successfully");
     } catch (error) {
-      console.error("Error processing receipt:", error);
+      const duration = Date.now() - startTime;
+      
+      await logError(error as Error, 'receipt_analysis_failed', {
+        fileName: file.name,
+        fileSize: file.size,
+        processingTime: duration
+      });
+      
       toast.dismiss();
       toast.error("Failed to analyze receipt");
     } finally {

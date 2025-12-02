@@ -18,10 +18,11 @@ import {
 import { db } from "@/lib/firebase";
 import { ExpenseType } from "@/types/expense";
 import { transformFirebaseExpense } from "@/lib/utils/typeGuards";
+import { logError, logUserActionWithUserId } from "@/lib/logging";
 
 // Get expenses for a user with optional limit and pagination
 export async function getExpenses(
-  userId: string, 
+  userId: string,
   limitCount?: number,
   lastVisible?: QueryDocumentSnapshot<DocumentData>
 ): Promise<{ expenses: ExpenseType[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, hasMore: boolean }> {
@@ -61,7 +62,7 @@ export async function getExpenses(
       hasMore
     };
   } catch (error) {
-    console.error("Error getting expenses:", error);
+    await logError(error as Error, 'getExpenses', { userId, limitCount });
     if (error instanceof Error) {
       throw new Error(`Failed to fetch expenses: ${error.message}`);
     }
@@ -112,9 +113,25 @@ export async function addExpense(expense: Omit<ExpenseType, 'id' | 'createdAt' |
       createdAt: Timestamp.fromDate(now),
       updatedAt: Timestamp.fromDate(now)
     });
+    
+    // Log expense creation
+    const logDetails: Record<string, unknown> = {
+      amount: expense.amount,
+      category: expense.category,
+      description: expense.description,
+      date: expense.date.toISOString().split('T')[0] // YYYY-MM-DD format
+    };
+    
+    // Only add location if it exists and is not empty
+    if (expense.location && expense.location.trim()) {
+      logDetails.location = expense.location;
+    }
+    
+    await logUserActionWithUserId(userId, 'expense_created', logDetails);
+    
     return docRef.id;
   } catch (error) {
-    console.error("Error adding expense:", error);
+    await logError(error as Error, 'addExpense', { userId, expense: { ...expense, amount: expense.amount } });
     if (error instanceof Error) {
       throw new Error(`Failed to add expense: ${error.message}`);
     }
@@ -148,8 +165,19 @@ export async function updateExpense(userId: string, expenseId: string, expenseDa
 
     // Type assertion to match Firestore's expected type
     await updateDoc(expenseDoc, updateData as Record<string, FieldValue | Partial<unknown> | undefined>);
+
+    // Log expense update
+    const logDetails: Record<string, unknown> = {};
+    
+    if (expenseData.amount !== undefined) logDetails.amount = expenseData.amount;
+    if (expenseData.category) logDetails.category = expenseData.category;
+    if (expenseData.description) logDetails.description = expenseData.description;
+    if (expenseData.date) logDetails.date = expenseData.date.toISOString().split('T')[0];
+    if (expenseData.location && expenseData.location.trim()) logDetails.location = expenseData.location;
+    
+    await logUserActionWithUserId(userId, 'expense_updated', logDetails);
   } catch (error) {
-    console.error("Error updating expense:", error);
+    await logError(error as Error, 'updateExpense', { userId, expenseId, updateFields: Object.keys(expenseData) });
     if (error instanceof Error) {
       throw new Error(`Failed to update expense: ${error.message}`);
     }
@@ -163,8 +191,11 @@ export async function deleteExpense(id: string, userId: string): Promise<void> {
     // Create a reference to the specific expense document
     const expenseDoc = doc(db, "users", userId, "expenses", id);
     await deleteDoc(expenseDoc);
+    
+    // Log expense deletion
+    await logUserActionWithUserId(userId, 'expense_deleted', {});
   } catch (error) {
-    console.error("Error deleting expense:", error);
+    await logError(error as Error, 'deleteExpense', { userId, expenseId: id });
     if (error instanceof Error) {
       throw new Error(`Failed to delete expense: ${error.message}`);
     }

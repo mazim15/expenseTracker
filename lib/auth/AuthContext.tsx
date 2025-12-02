@@ -11,6 +11,7 @@ import {
   updateProfile
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { logAuth, setLoggerUser, clearLoggerUser } from "@/lib/logging";
 
 // Rename the User type to avoid conflict with Firebase's User
 type AuthUser = {
@@ -43,12 +44,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        setUser({
+        const userData = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
+        };
+        setUser(userData);
+        
+        // Set logger context
+        setLoggerUser(firebaseUser.uid, firebaseUser.email || undefined);
+        
+        // Log authentication state change
+        logAuth('state_change', true, {
+          userId: firebaseUser.uid,
+          email: firebaseUser.email,
+          action: 'user_authenticated'
         });
       } else {
         setUser(null);
+        
+        // Clear logger context
+        clearLoggerUser();
+        
+        // Log authentication state change
+        logAuth('state_change', false, {
+          action: 'user_unauthenticated'
+        });
       }
       setLoading(false);
     });
@@ -57,22 +77,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    await createUserWithEmailAndPassword(auth, email, password);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await logAuth('signup', true, {
+        userId: userCredential.user.uid,
+        email: userCredential.user.email
+      });
+    } catch (error) {
+      await logAuth('signup', false, {
+        email,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
-      console.log("AuthContext: Attempting sign in with:", email);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log("AuthContext: Sign in successful:", userCredential.user.uid);
+      await logAuth('signin', true, {
+        userId: userCredential.user.uid,
+        email: userCredential.user.email
+      });
     } catch (error: unknown) {
-      console.error("AuthContext: Sign in failed:", error);
+      await logAuth('signin', false, {
+        email,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   };
 
   const signOut = async () => {
-    await firebaseSignOut(auth);
+    try {
+      const currentUser = auth.currentUser;
+      await firebaseSignOut(auth);
+      await logAuth('signout', true, {
+        userId: currentUser?.uid,
+        email: currentUser?.email
+      });
+    } catch (error) {
+      await logAuth('signout', false, {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
   };
 
   const resetPassword = async (email: string) => {
@@ -83,9 +132,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       
       await sendPasswordResetEmail(auth, email, actionCodeSettings);
-      console.log('Password reset email sent successfully to:', email);
+      await logAuth('password_reset', true, { email });
     } catch (error: unknown) {
-      console.error('Password reset error:', error);
+      await logAuth('password_reset', false, {
+        email,
+        error: error instanceof Error ? error.message : String(error)
+      });
       const errorMessage = error && typeof error === 'object' && 'message' in error 
         ? (error as { message: string }).message 
         : 'Failed to send password reset email';

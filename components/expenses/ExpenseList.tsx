@@ -16,6 +16,9 @@ type ExpenseListProps = {
   expenses: ExpenseType[];
   onDelete?: (id: string) => void;
   onEdit?: (expense: ExpenseType) => void;
+  selectedExpenses?: string[];
+  onToggleSelection?: (expenseId: string) => void;
+  viewMode?: "list" | "grid";
 };
 
 export default function ExpenseList({ expenses, onDelete, onEdit }: ExpenseListProps) {

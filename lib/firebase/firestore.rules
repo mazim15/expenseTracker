@@ -44,6 +44,22 @@ service cloud.firestore {
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
     
+    // Rules for logs collection
+    match /logs/{logId} {
+      // Users can read their own logs OR admin users can read all logs
+      allow read: if isSignedIn() && 
+        (request.auth.uid == resource.data.userId || 
+         request.auth.token.email == 'admin@example.com' || 
+         request.auth.token.email == 'admin@localhost');
+      // Allow system to write logs
+      allow create: if isSignedIn();
+      // Prevent updates and deletes from clients (except for admin deletion)
+      allow update: if false;
+      allow delete: if isSignedIn() && 
+        (request.auth.token.email == 'admin@example.com' || 
+         request.auth.token.email == 'admin@localhost');
+    }
+    
     // Add any additional collections needed for your application
     // For example, if you have shared data:
     match /sharedData/{docId} {

@@ -38,8 +38,19 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
 export default function MonthlyBarChart({ data }: MonthlyBarChartProps) {
   const formatValue = (value: number) => formatCurrency(value, { notation: 'compact' });
 
+  // Debug log
+  console.log('MonthlyBarChart data:', data);
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">No data available</p>
+      </div>
+    );
+  }
+
   return (
-    <div role="img" aria-label="Monthly expenses bar chart">
+    <div role="img" aria-label="Monthly expenses bar chart" className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
@@ -49,7 +60,7 @@ export default function MonthlyBarChart({ data }: MonthlyBarChartProps) {
           <XAxis dataKey="name" />
           <YAxis tickFormatter={formatValue} />
           <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="amount" fill="#8884d8" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="amount" fill="#3B82F6" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
