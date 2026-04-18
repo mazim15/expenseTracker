@@ -7,9 +7,16 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -22,34 +29,18 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    console.log("Login attempt:", { email, passwordLength: password.length });
-
     try {
       setError("");
       setLoading(true);
-
-      console.log("Calling signIn...");
       await signIn(email, password);
 
-      console.log("Sign in successful, redirecting to dashboard...");
-
-      // Small delay to ensure auth state is updated
       await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Get redirect URL from query params or default to dashboard
       const redirectTo =
         new URLSearchParams(window.location.search).get("redirect") || "/dashboard";
-      console.log("Redirecting to:", redirectTo);
-
       router.push(redirectTo);
-
-      // Force a page refresh to ensure auth state is properly loaded
       window.location.href = redirectTo;
     } catch (err: unknown) {
-      console.error("Login error:", err);
-
       let errorMessage = "Failed to sign in";
-
       if (err && typeof err === "object" && "code" in err) {
         const firebaseErr = err as { code: string; message?: string };
         switch (firebaseErr.code) {
@@ -77,7 +68,6 @@ export default function Login() {
       } else if (err && typeof err === "object" && "message" in err) {
         errorMessage = (err as { message: string }).message || "Failed to sign in";
       }
-
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -85,80 +75,70 @@ export default function Login() {
   };
 
   return (
-    <div className="container flex h-screen w-screen flex-col items-center justify-center">
-      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-        <div className="flex flex-col space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-          <p className="text-muted-foreground text-sm">
-            Enter your credentials to sign in to your account
-          </p>
-        </div>
-        <Card className="border-none shadow-lg">
-          <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="name@example.com"
-                  className="transition-all duration-200"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                  <Link href="/reset-password" className="text-primary text-xs hover:underline">
-                    Forgot password?
-                  </Link>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="transition-all duration-200"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full shadow-md transition-all hover:shadow-lg"
-                disabled={loading}
+    <Card>
+      <CardHeader className="space-y-1.5">
+        <CardTitle className="text-xl">Welcome back</CardTitle>
+        <CardDescription>Sign in to your account to continue.</CardDescription>
+      </CardHeader>
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="name@example.com"
+              autoComplete="email"
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link
+                href="/reset-password"
+                className="text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
               >
-                {loading ? (
-                  <div className="flex items-center justify-center">
-                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    Signing in...
-                  </div>
-                ) : (
-                  "Sign In"
-                )}
-              </Button>
-            </form>
-          </CardContent>
-          <CardFooter className="flex flex-col">
-            <div className="mt-2 text-center text-sm">
-              Don&apos;t have an account?{" "}
-              <Link href="/register" className="text-primary hover:underline">
-                Sign up
+                Forgot password?
               </Link>
             </div>
-          </CardFooter>
-        </Card>
-      </div>
-    </div>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col gap-4">
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Signing in…
+              </>
+            ) : (
+              "Sign in"
+            )}
+          </Button>
+          <p className="text-muted-foreground text-center text-sm">
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className="text-foreground font-medium hover:underline">
+              Create one
+            </Link>
+          </p>
+        </CardFooter>
+      </form>
+    </Card>
   );
 }

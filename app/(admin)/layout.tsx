@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -27,5 +27,5 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  return <AppShell>{children}</AppShell>;
+  return <AppShell showAdmin>{children}</AppShell>;
 }

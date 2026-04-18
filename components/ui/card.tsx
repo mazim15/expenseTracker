@@ -9,11 +9,10 @@ const Card = React.forwardRef<
   }
 >(({ className, variant = "default", ...props }, ref) => {
   const variants = {
-    default:
-      "rounded-lg border bg-card text-card-foreground shadow-md transition-all hover:shadow-lg",
+    default: "rounded-lg border border-border bg-card text-card-foreground shadow-xs",
     interactive:
-      "rounded-lg border bg-card text-card-foreground shadow-md transition-all hover:shadow-lg hover-lift cursor-pointer",
-    flat: "rounded-lg border bg-card text-card-foreground",
+      "rounded-lg border border-border bg-card text-card-foreground shadow-xs transition-colors hover:border-ring/50 cursor-pointer",
+    flat: "rounded-lg border border-border bg-card text-card-foreground",
   };
 
   return <div ref={ref} className={cn(variants[variant], className)} {...props} />;
@@ -31,7 +30,7 @@ const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HT
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn("text-2xl leading-none font-semibold tracking-tight", className)}
+      className={cn("text-base leading-none font-semibold tracking-tight", className)}
       {...props}
     />
   ),

@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 
 export default function ResetPassword() {
   const [email, setEmail] = useState("");
@@ -26,66 +26,71 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     try {
       setError("");
       setMessage("");
       setLoading(true);
       await resetPassword(email);
-      setMessage("Check your email for password reset instructions");
+      setMessage("Check your email for password reset instructions.");
     } catch (err: Error | unknown) {
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-      setError(errorMessage);
+      const msg = err instanceof Error ? err.message : "An unknown error occurred";
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="container mx-auto flex justify-center px-4 py-16">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Reset Password</CardTitle>
-          <CardDescription>Enter your email to receive a password reset link</CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+    <Card>
+      <CardHeader className="space-y-1.5">
+        <CardTitle className="text-xl">Reset password</CardTitle>
+        <CardDescription>Enter your email and we&apos;ll send you a reset link.</CardDescription>
+      </CardHeader>
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {message && (
+            <Alert variant="success">
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>{message}</AlertDescription>
+            </Alert>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="name@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col gap-4">
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending…
+              </>
+            ) : (
+              "Send reset link"
             )}
-            {message && (
-              <Alert variant="success" className="border-green-200 bg-green-50 text-green-800">
-                <CheckCircle className="h-4 w-4" />
-                <AlertDescription>{message}</AlertDescription>
-              </Alert>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Sending..." : "Reset Password"}
-            </Button>
-            <p className="text-muted-foreground text-center text-sm">
-              <Link href="/login" className="text-primary hover:underline">
-                Back to login
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
-    </div>
+          </Button>
+          <p className="text-muted-foreground text-center text-sm">
+            <Link href="/login" className="text-foreground font-medium hover:underline">
+              Back to sign in
+            </Link>
+          </p>
+        </CardFooter>
+      </form>
+    </Card>
   );
 }
