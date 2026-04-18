@@ -1,14 +1,14 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { 
-  User as FirebaseUser, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut as firebaseSignOut, 
+import {
+  User as FirebaseUser,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
-  updateProfile
+  updateProfile,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { logAuth, setLoggerUser, clearLoggerUser } from "@/lib/logging";
@@ -49,25 +49,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: firebaseUser.email,
         };
         setUser(userData);
-        
+
         // Set logger context
         setLoggerUser(firebaseUser.uid, firebaseUser.email || undefined);
-        
+
         // Log authentication state change
-        logAuth('state_change', true, {
+        logAuth("state_change", true, {
           userId: firebaseUser.uid,
           email: firebaseUser.email,
-          action: 'user_authenticated'
+          action: "user_authenticated",
         });
       } else {
         setUser(null);
-        
+
         // Clear logger context
         clearLoggerUser();
-        
+
         // Log authentication state change
-        logAuth('state_change', false, {
-          action: 'user_unauthenticated'
+        logAuth("state_change", false, {
+          action: "user_unauthenticated",
         });
       }
       setLoading(false);
@@ -79,14 +79,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await logAuth('signup', true, {
+      await logAuth("signup", true, {
         userId: userCredential.user.uid,
-        email: userCredential.user.email
+        email: userCredential.user.email,
       });
     } catch (error) {
-      await logAuth('signup', false, {
+      await logAuth("signup", false, {
         email,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -95,14 +95,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      await logAuth('signin', true, {
+      await logAuth("signin", true, {
         userId: userCredential.user.uid,
-        email: userCredential.user.email
+        email: userCredential.user.email,
       });
     } catch (error: unknown) {
-      await logAuth('signin', false, {
+      await logAuth("signin", false, {
         email,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -112,13 +112,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const currentUser = auth.currentUser;
       await firebaseSignOut(auth);
-      await logAuth('signout', true, {
+      await logAuth("signout", true, {
         userId: currentUser?.uid,
-        email: currentUser?.email
+        email: currentUser?.email,
       });
     } catch (error) {
-      await logAuth('signout', false, {
-        error: error instanceof Error ? error.message : String(error)
+      await logAuth("signout", false, {
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -130,24 +130,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         url: `${window.location.origin}/login`,
         handleCodeInApp: false,
       };
-      
+
       await sendPasswordResetEmail(auth, email, actionCodeSettings);
-      await logAuth('password_reset', true, { email });
+      await logAuth("password_reset", true, { email });
     } catch (error: unknown) {
-      await logAuth('password_reset', false, {
+      await logAuth("password_reset", false, {
         email,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
-      const errorMessage = error && typeof error === 'object' && 'message' in error 
-        ? (error as { message: string }).message 
-        : 'Failed to send password reset email';
+      const errorMessage =
+        error && typeof error === "object" && "message" in error
+          ? (error as { message: string }).message
+          : "Failed to send password reset email";
       throw new Error(errorMessage);
     }
   };
 
   const updateUser = async (profileData: UserProfileUpdate) => {
     if (!auth.currentUser) throw new Error("No user logged in");
-    
+
     try {
       await updateProfile(auth.currentUser, profileData);
       // Force a re-render by updating the user state if we have a current user
@@ -165,7 +166,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, resetPassword, updateUser }}>
+    <AuthContext.Provider
+      value={{ user, loading, signUp, signIn, signOut, resetPassword, updateUser }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -177,4 +180,4 @@ export function useAuth() {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
-} 
+}

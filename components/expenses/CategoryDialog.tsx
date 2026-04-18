@@ -17,7 +17,11 @@ type CategoryDialogProps = {
   onCategoriesUpdate?: (categories: typeof EXPENSE_CATEGORIES) => void;
 };
 
-export default function CategoryDialog({ open, onOpenChange, onCategoriesUpdate }: CategoryDialogProps) {
+export default function CategoryDialog({
+  open,
+  onOpenChange,
+  onCategoriesUpdate,
+}: CategoryDialogProps) {
   const { user } = useAuth();
   const [categories, setCategories] = useState(() => {
     if (typeof window !== "undefined") {
@@ -30,7 +34,7 @@ export default function CategoryDialog({ open, onOpenChange, onCategoriesUpdate 
 
   const handleAddCategory = () => {
     if (newCategory.label.trim()) {
-      const value = newCategory.label.toLowerCase().replace(/\s+/g, '-');
+      const value = newCategory.label.toLowerCase().replace(/\s+/g, "-");
       setCategories([...categories, { value, label: newCategory.label.trim() }]);
       setNewCategory({ value: "", label: "" });
     }
@@ -43,12 +47,12 @@ export default function CategoryDialog({ open, onOpenChange, onCategoriesUpdate 
   const handleSave = async () => {
     try {
       updateExpenseCategories(categories);
-      
+
       // Save to localStorage for immediate use
       if (typeof window !== "undefined") {
         localStorage.setItem("expense-categories", JSON.stringify(categories));
       }
-      
+
       // Also save to database if user is authenticated
       if (user && user.uid) {
         console.log("Saving categories to database for user:", user.uid);
@@ -56,7 +60,7 @@ export default function CategoryDialog({ open, onOpenChange, onCategoriesUpdate 
       } else {
         console.warn("Cannot save categories to database: No authenticated user");
       }
-      
+
       onCategoriesUpdate?.(categories);
       onOpenChange(false);
     } catch (error) {
@@ -67,34 +71,36 @@ export default function CategoryDialog({ open, onOpenChange, onCategoriesUpdate 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 overflow-hidden max-w-md">
-        <DialogHeader className="bg-blue-600 text-white p-4">
-          <DialogTitle className="text-xl font-bold text-white">
-            Manage Categories
-          </DialogTitle>
+      <DialogContent className="max-w-md overflow-hidden p-0">
+        <DialogHeader className="bg-blue-600 p-4 text-white">
+          <DialogTitle className="text-xl font-bold text-white">Manage Categories</DialogTitle>
         </DialogHeader>
-        
-        <div className="p-4 space-y-4">
+
+        <div className="space-y-4 p-4">
           <div className="space-y-2">
-            <Label htmlFor="newCategory" className="text-sm font-medium">Add New Category</Label>
+            <Label htmlFor="newCategory" className="text-sm font-medium">
+              Add New Category
+            </Label>
             <div className="flex gap-2">
               <Input
                 id="newCategory"
                 value={newCategory.label}
-                onChange={(e) => setNewCategory({
-                  label: e.target.value,
-                  value: e.target.value.toLowerCase().replace(/\s+/g, '-')
-                })}
+                onChange={(e) =>
+                  setNewCategory({
+                    label: e.target.value,
+                    value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
+                  })
+                }
                 placeholder="Category name"
                 className="flex-1"
               />
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={handleAddCategory}
                 className="shrink-0"
               >
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="mr-2 h-4 w-4" />
                 Add
               </Button>
             </div>
@@ -102,15 +108,15 @@ export default function CategoryDialog({ open, onOpenChange, onCategoriesUpdate 
 
           <div className="space-y-2">
             <Label className="text-sm font-medium">Current Categories</Label>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+            <div className="max-h-[300px] space-y-2 overflow-y-auto">
               {categories.map((category: ExpenseCategoryType) => (
-                <div 
+                <div
                   key={category.value}
-                  className="flex items-center justify-between p-2 bg-muted rounded-md"
+                  className="bg-muted flex items-center justify-between rounded-md p-2"
                 >
                   <span>{category.label}</span>
                   {/* Don't allow removing the "other" category */}
-                  {category.value !== 'other' && (
+                  {category.value !== "other" && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -127,20 +133,16 @@ export default function CategoryDialog({ open, onOpenChange, onCategoriesUpdate 
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+          <div className="flex justify-end gap-2 border-t pt-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button
               type="button"
               onClick={handleSave}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-blue-600 text-white hover:bg-blue-700"
             >
-              <Save className="h-4 w-4 mr-2" />
+              <Save className="mr-2 h-4 w-4" />
               Save Changes
             </Button>
           </div>
@@ -148,4 +150,4 @@ export default function CategoryDialog({ open, onOpenChange, onCategoriesUpdate 
       </DialogContent>
     </Dialog>
   );
-} 
+}

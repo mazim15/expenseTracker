@@ -12,4 +12,4 @@ export interface UserProfileData {
 export interface UserProfileFormData {
   displayName: string;
   email: string;
-} 
+}

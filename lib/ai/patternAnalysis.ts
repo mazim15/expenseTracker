@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import { GeminiClient } from './geminiClient';
-import { ExpenseType } from '@/types/expense';
-import { 
-  SpendingPattern, 
-  SpendingInsight, 
-  SpendingAnomaly, 
+ 
+import { GeminiClient } from "./geminiClient";
+import { ExpenseType } from "@/types/expense";
+import {
+  SpendingPattern,
+  SpendingInsight,
+  SpendingAnomaly,
   FinancialHealthScore,
-  AIInsightsResponse 
-} from '@/types/ai';
+  AIInsightsResponse,
+} from "@/types/ai";
 
 export class PatternAnalysisService {
   private static instance: PatternAnalysisService;
@@ -25,14 +25,17 @@ export class PatternAnalysisService {
     return PatternAnalysisService.instance;
   }
 
-  async analyzeSpendingPatterns(expenses: ExpenseType[], timeRange: 'week' | 'month' | 'quarter' = 'month'): Promise<AIInsightsResponse> {
+  async analyzeSpendingPatterns(
+    expenses: ExpenseType[],
+    timeRange: "week" | "month" | "quarter" = "month",
+  ): Promise<AIInsightsResponse> {
     if (!this.geminiClient.isAvailable()) {
       return this.getFallbackAnalysis(expenses);
     }
 
     try {
       const analysisData = this.prepareExpenseData(expenses, timeRange);
-      
+
       const prompt = `
 Analyze the following spending data and provide comprehensive financial insights:
 
@@ -102,13 +105,13 @@ Focus on:
       if (response.success && response.data) {
         return {
           ...response.data,
-          recommendations: await this.generateRecommendations(expenses)
+          recommendations: await this.generateRecommendations(expenses),
         };
       }
 
       return this.getFallbackAnalysis(expenses);
     } catch (error) {
-      console.error('Pattern analysis error:', error);
+      console.error("Pattern analysis error:", error);
       return this.getFallbackAnalysis(expenses);
     }
   }
@@ -116,99 +119,114 @@ Focus on:
   private prepareExpenseData(expenses: ExpenseType[], timeRange: string): string {
     const now = new Date();
     const startDate = new Date();
-    
+
     switch (timeRange) {
-      case 'week':
+      case "week":
         startDate.setDate(now.getDate() - 7);
         break;
-      case 'month':
+      case "month":
         startDate.setMonth(now.getMonth() - 1);
         break;
-      case 'quarter':
+      case "quarter":
         startDate.setMonth(now.getMonth() - 3);
         break;
     }
 
-    const filteredExpenses = expenses.filter(expense => 
-      new Date(expense.date) >= startDate
-    );
+    const filteredExpenses = expenses.filter((expense) => new Date(expense.date) >= startDate);
 
     // Group by category
-    const categoryData = filteredExpenses.reduce((acc, expense) => {
-      if (!acc[expense.category]) {
-        acc[expense.category] = {
-          total: 0,
-          count: 0,
-          amounts: [],
-          dates: []
-        };
-      }
-      acc[expense.category].total += expense.amount;
-      acc[expense.category].count += 1;
-      acc[expense.category].amounts.push(expense.amount);
-      acc[expense.category].dates.push(expense.date.toISOString());
-      return acc;
-    }, {} as Record<string, { total: number; count: number; amounts: number[]; dates: string[] }>);
+    const categoryData = filteredExpenses.reduce(
+      (acc, expense) => {
+        if (!acc[expense.category]) {
+          acc[expense.category] = {
+            total: 0,
+            count: 0,
+            amounts: [],
+            dates: [],
+          };
+        }
+        acc[expense.category].total += expense.amount;
+        acc[expense.category].count += 1;
+        acc[expense.category].amounts.push(expense.amount);
+        acc[expense.category].dates.push(expense.date.toISOString());
+        return acc;
+      },
+      {} as Record<string, { total: number; count: number; amounts: number[]; dates: string[] }>,
+    );
 
     // Group by day of week
-    const weekdayData = filteredExpenses.reduce((acc, expense) => {
-      const dayOfWeek = new Date(expense.date).toLocaleDateString('en-US', { weekday: 'long' });
-      acc[dayOfWeek] = (acc[dayOfWeek] || 0) + expense.amount;
-      return acc;
-    }, {} as Record<string, number>);
+    const weekdayData = filteredExpenses.reduce(
+      (acc, expense) => {
+        const dayOfWeek = new Date(expense.date).toLocaleDateString("en-US", { weekday: "long" });
+        acc[dayOfWeek] = (acc[dayOfWeek] || 0) + expense.amount;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     return `
 Time Range: ${timeRange} (${filteredExpenses.length} transactions)
 Total Spending: $${filteredExpenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}
 
 Category Breakdown:
-${Object.entries(categoryData).map(([category, data]) => 
-  `- ${category}: $${data.total.toFixed(2)} (${data.count} transactions, avg: $${(data.total / data.count).toFixed(2)})`
-).join('\n')}
+${Object.entries(categoryData)
+  .map(
+    ([category, data]) =>
+      `- ${category}: $${data.total.toFixed(2)} (${data.count} transactions, avg: $${(data.total / data.count).toFixed(2)})`,
+  )
+  .join("\n")}
 
 Day of Week Analysis:
-${Object.entries(weekdayData).map(([day, amount]) => 
-  `- ${day}: $${amount.toFixed(2)}`
-).join('\n')}
+${Object.entries(weekdayData)
+  .map(([day, amount]) => `- ${day}: $${amount.toFixed(2)}`)
+  .join("\n")}
 
 Recent Large Transactions (>$100):
 ${filteredExpenses
-  .filter(e => e.amount > 100)
+  .filter((e) => e.amount > 100)
   .sort((a, b) => b.amount - a.amount)
   .slice(0, 5)
-  .map(e => `- $${e.amount.toFixed(2)} on ${e.date.toLocaleDateString()} for ${e.description} (${e.category})`)
-  .join('\n')}
+  .map(
+    (e) =>
+      `- $${e.amount.toFixed(2)} on ${e.date.toLocaleDateString()} for ${e.description} (${e.category})`,
+  )
+  .join("\n")}
 
 Transaction Frequency:
-${Object.entries(categoryData).map(([category, data]) => {
-  const days = Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-  const frequency = data.count / days;
-  return `- ${category}: ${frequency.toFixed(2)} transactions per day`;
-}).join('\n')}
+${Object.entries(categoryData)
+  .map(([category, data]) => {
+    const days = Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const frequency = data.count / days;
+    return `- ${category}: ${frequency.toFixed(2)} transactions per day`;
+  })
+  .join("\n")}
 `;
   }
 
   private async generateRecommendations(expenses: ExpenseType[]) {
     const recommendations = [];
-    
+
     // Simple rule-based recommendations for fallback
-    const categoryTotals = expenses.reduce((acc, expense) => {
-      acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
-      return acc;
-    }, {} as Record<string, number>);
+    const categoryTotals = expenses.reduce(
+      (acc, expense) => {
+        acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     const totalSpending = Object.values(categoryTotals).reduce((sum, amount) => sum + amount, 0);
 
     for (const [category, amount] of Object.entries(categoryTotals)) {
       const percentage = (amount / totalSpending) * 100;
-      
+
       if (percentage > 40) {
         recommendations.push({
           category,
           currentSpending: amount,
           recommendedBudget: amount * 0.85,
           reasoning: `${category} represents ${percentage.toFixed(1)}% of your spending. Consider reducing by 15%.`,
-          potentialSavings: amount * 0.15
+          potentialSavings: amount * 0.15,
         });
       }
     }
@@ -217,10 +235,13 @@ ${Object.entries(categoryData).map(([category, data]) => {
   }
 
   private getFallbackAnalysis(expenses: ExpenseType[]): AIInsightsResponse {
-    const categoryTotals = expenses.reduce((acc, expense) => {
-      acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
-      return acc;
-    }, {} as Record<string, number>);
+    const categoryTotals = expenses.reduce(
+      (acc, expense) => {
+        acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     const totalSpending = Object.values(categoryTotals).reduce((sum, amount) => sum + amount, 0);
     const averageTransaction = totalSpending / expenses.length;
@@ -230,46 +251,46 @@ ${Object.entries(categoryData).map(([category, data]) => {
     const anomalies: SpendingAnomaly[] = [];
 
     // Generate basic insights
-    const topCategory = Object.entries(categoryTotals).reduce((a, b) => 
-      categoryTotals[a[0]] > categoryTotals[b[0]] ? a : b
+    const topCategory = Object.entries(categoryTotals).reduce((a, b) =>
+      categoryTotals[a[0]] > categoryTotals[b[0]] ? a : b,
     );
 
     insights.push({
-      id: 'top_category',
-      type: 'info',
+      id: "top_category",
+      type: "info",
       title: `Highest spending category: ${topCategory[0]}`,
       description: `You spent $${topCategory[1].toFixed(2)} on ${topCategory[0]}, which is ${((topCategory[1] / totalSpending) * 100).toFixed(1)}% of your total spending.`,
       actionable: true,
       action: `Review your ${topCategory[0]} expenses for potential savings`,
-      severity: 'medium',
+      severity: "medium",
       category: topCategory[0],
       amount: topCategory[1],
-      createdAt: new Date()
+      createdAt: new Date(),
     });
 
     // Generate patterns
     Object.entries(categoryTotals).forEach(([category, total]) => {
-      const categoryExpenses = expenses.filter(e => e.category === category);
+      const categoryExpenses = expenses.filter((e) => e.category === category);
       patterns.push({
         category,
         averageAmount: total / categoryExpenses.length,
-        frequency: categoryExpenses.length > 10 ? 'frequent' as any : 'occasional',
-        trend: 'stable',
-        confidence: 0.7
+        frequency: categoryExpenses.length > 10 ? ("frequent" as any) : "occasional",
+        trend: "stable",
+        confidence: 0.7,
       });
     });
 
     // Find anomalies (large transactions)
-    expenses.forEach(expense => {
+    expenses.forEach((expense) => {
       if (expense.amount > averageTransaction * 3) {
         anomalies.push({
           id: `anomaly_${expense.id}`,
           expenseId: expense.id,
-          type: 'unusual_amount',
+          type: "unusual_amount",
           description: `Unusually large ${expense.category} expense: $${expense.amount}`,
-          severity: expense.amount > averageTransaction * 5 ? 'high' : 'medium',
+          severity: expense.amount > averageTransaction * 5 ? "high" : "medium",
           detectedAt: new Date(),
-          confidence: 0.8
+          confidence: 0.8,
         });
       }
     });
@@ -284,9 +305,9 @@ ${Object.entries(categoryData).map(([category, data]) => {
         spendingConsistency: 70,
         categoryBalance: 75,
         trendHealth: 75,
-        lastUpdated: new Date()
+        lastUpdated: new Date(),
       },
-      anomalies
+      anomalies,
     };
   }
 
@@ -296,9 +317,9 @@ ${Object.entries(categoryData).map(([category, data]) => {
     }
 
     const recentExpenses = expenses.slice(-10);
-    const expensesSummary = recentExpenses.map(e => 
-      `$${e.amount} on ${e.description} (${e.category})`
-    ).join(', ');
+    const expensesSummary = recentExpenses
+      .map((e) => `$${e.amount} on ${e.description} (${e.category})`)
+      .join(", ");
 
     const prompt = `
 Based on these recent expenses: ${expensesSummary}
@@ -309,10 +330,11 @@ Generate a single, insightful sentence about the user's spending pattern. Be spe
     const response = await this.geminiClient.generateContent({
       prompt,
       temperature: 0.4,
-      maxTokens: 100
+      maxTokens: 100,
     });
 
-    return response.success ? response.text.trim() : 
-      `Your recent spending shows a focus on ${recentExpenses[0]?.category || 'various'} expenses.`;
+    return response.success
+      ? response.text.trim()
+      : `Your recent spending shows a focus on ${recentExpenses[0]?.category || "various"} expenses.`;
   }
 }

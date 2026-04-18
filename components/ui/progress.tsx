@@ -11,19 +11,16 @@ interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
 const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
   ({ className, value = 0, max = 100, ...props }, ref) => {
     const percentage = Math.min(Math.max(0, (value / max) * 100), 100);
-    
+
     // Determine color based on percentage
     let colorClass = "bg-primary";
     if (percentage > 90) colorClass = "bg-destructive";
     else if (percentage > 75) colorClass = "bg-amber-500";
-    
+
     return (
       <div
         ref={ref}
-        className={cn(
-          "relative h-4 w-full overflow-hidden rounded-full bg-secondary",
-          className
-        )}
+        className={cn("bg-secondary relative h-4 w-full overflow-hidden rounded-full", className)}
         {...props}
       >
         <div
@@ -35,9 +32,9 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
         </span>
       </div>
     );
-  }
+  },
 );
 
 Progress.displayName = "Progress";
 
-export { Progress }; 
+export { Progress };

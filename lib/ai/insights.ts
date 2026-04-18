@@ -1,9 +1,9 @@
-import { GeminiClient } from './geminiClient';
-import { ExpenseType } from '@/types/expense';
-import { SpendingInsight } from '@/types/ai';
-import { PatternAnalysisService } from './patternAnalysis';
-import { AnomalyDetectionService } from './anomalyDetection';
-import { RecommendationService } from './recommendations';
+import { GeminiClient } from "./geminiClient";
+import { ExpenseType } from "@/types/expense";
+import { SpendingInsight } from "@/types/ai";
+import { PatternAnalysisService } from "./patternAnalysis";
+import { AnomalyDetectionService } from "./anomalyDetection";
+import { RecommendationService } from "./recommendations";
 
 export class InsightsService {
   private static instance: InsightsService;
@@ -35,14 +35,14 @@ export class InsightsService {
     const [quickInsight, analysis, personalizedTips] = await Promise.all([
       this.generateQuickInsight(expenses),
       this.patternAnalysis.analyzeSpendingPatterns(expenses),
-      this.recommendations.generatePersonalizedTips(expenses)
+      this.recommendations.generatePersonalizedTips(expenses),
     ]);
 
     return {
       quickInsight,
       keyInsights: analysis.insights.slice(0, 3), // Top 3 insights
       recommendations: personalizedTips.slice(0, 4), // Top 4 recommendations
-      healthScore: analysis.healthScore.overall
+      healthScore: analysis.healthScore.overall,
     };
   }
 
@@ -55,18 +55,21 @@ export class InsightsService {
       const recentExpenses = expenses.slice(-30); // Last 30 transactions
       const thisMonth = new Date();
       thisMonth.setDate(1);
-      
-      const monthlyExpenses = expenses.filter(e => new Date(e.date) >= thisMonth);
+
+      const monthlyExpenses = expenses.filter((e) => new Date(e.date) >= thisMonth);
       const monthlyTotal = monthlyExpenses.reduce((sum, e) => sum + e.amount, 0);
-      
+
       const topCategory = this.getTopSpendingCategory(monthlyExpenses);
-      
+
       const prompt = `
 Generate a single, insightful sentence about the user's spending this month:
 
 Monthly spending: $${monthlyTotal.toFixed(2)} across ${monthlyExpenses.length} transactions
 Top category: ${topCategory.category} ($${topCategory.amount.toFixed(2)})
-Recent transactions: ${recentExpenses.slice(-5).map(e => `$${e.amount} on ${e.description}`).join(', ')}
+Recent transactions: ${recentExpenses
+        .slice(-5)
+        .map((e) => `$${e.amount} on ${e.description}`)
+        .join(", ")}
 
 Create an engaging, specific insight that:
 1. Highlights a key spending pattern or trend
@@ -84,16 +87,16 @@ Examples:
       const response = await this.geminiClient.generateContent({
         prompt,
         temperature: 0.6,
-        maxTokens: 200
+        maxTokens: 200,
       });
 
       if (response.success && response.text.trim()) {
-        return response.text.trim().replace(/"/g, '');
+        return response.text.trim().replace(/"/g, "");
       }
 
       return this.getFallbackQuickInsight(expenses);
     } catch (error) {
-      console.error('Quick insight generation error:', error);
+      console.error("Quick insight generation error:", error);
       return this.getFallbackQuickInsight(expenses);
     }
   }
@@ -110,10 +113,10 @@ Examples:
 
     try {
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const weeklyExpenses = expenses.filter(e => new Date(e.date) >= weekAgo);
-      
+      const weeklyExpenses = expenses.filter((e) => new Date(e.date) >= weekAgo);
+
       const weeklyData = this.prepareWeeklyData(weeklyExpenses);
-      
+
       const prompt = `
 Generate a weekly spending report based on this data:
 
@@ -147,12 +150,15 @@ Make it:
 
       return this.getFallbackWeeklyReport(expenses);
     } catch (error) {
-      console.error('Weekly report generation error:', error);
+      console.error("Weekly report generation error:", error);
       return this.getFallbackWeeklyReport(expenses);
     }
   }
 
-  async generateSpendingStory(expenses: ExpenseType[], timeframe: 'week' | 'month' | 'quarter' = 'month'): Promise<string> {
+  async generateSpendingStory(
+    expenses: ExpenseType[],
+    timeframe: "week" | "month" | "quarter" = "month",
+  ): Promise<string> {
     if (!this.geminiClient.isAvailable()) {
       return this.getFallbackSpendingStory(expenses, timeframe);
     }
@@ -160,7 +166,7 @@ Make it:
     try {
       const timeframeExpenses = this.filterByTimeframe(expenses, timeframe);
       const storyData = this.prepareStoryData(timeframeExpenses, timeframe);
-      
+
       const prompt = `
 Create an engaging narrative about this user's spending journey for the ${timeframe}:
 
@@ -180,7 +186,7 @@ Make it personal and relatable, like a financial friend reviewing their journey.
       const response = await this.geminiClient.generateContent({
         prompt,
         temperature: 0.7,
-        maxTokens: 500
+        maxTokens: 500,
       });
 
       if (response.success && response.text.trim()) {
@@ -189,25 +195,28 @@ Make it personal and relatable, like a financial friend reviewing their journey.
 
       return this.getFallbackSpendingStory(expenses, timeframe);
     } catch (error) {
-      console.error('Spending story generation error:', error);
+      console.error("Spending story generation error:", error);
       return this.getFallbackSpendingStory(expenses, timeframe);
     }
   }
 
-  async generateCategoryInsight(expenses: ExpenseType[], category: string): Promise<{
+  async generateCategoryInsight(
+    expenses: ExpenseType[],
+    category: string,
+  ): Promise<{
     insight: string;
-    trend: 'increasing' | 'decreasing' | 'stable';
+    trend: "increasing" | "decreasing" | "stable";
     recommendation: string;
     comparison: string;
   }> {
-    const categoryExpenses = expenses.filter(e => e.category === category);
-    
+    const categoryExpenses = expenses.filter((e) => e.category === category);
+
     if (categoryExpenses.length === 0) {
       return {
         insight: `No ${category} expenses found in your recent history.`,
-        trend: 'stable',
+        trend: "stable",
         recommendation: `Consider tracking ${category} expenses to better understand this aspect of your spending.`,
-        comparison: 'No historical data available for comparison.'
+        comparison: "No historical data available for comparison.",
       };
     }
 
@@ -217,7 +226,7 @@ Make it personal and relatable, like a financial friend reviewing their journey.
 
     try {
       const categoryData = this.prepareCategoryData(categoryExpenses, category);
-      
+
       const prompt = `
 Analyze this category's spending data and provide insights:
 
@@ -236,7 +245,7 @@ Be specific, helpful, and encouraging.
 
       const response = await this.geminiClient.generateStructuredContent<{
         insight: string;
-        trend: 'increasing' | 'decreasing' | 'stable';
+        trend: "increasing" | "decreasing" | "stable";
         recommendation: string;
         comparison: string;
       }>(prompt);
@@ -247,23 +256,29 @@ Be specific, helpful, and encouraging.
 
       return this.getFallbackCategoryInsight(categoryExpenses, category);
     } catch (error) {
-      console.error('Category insight generation error:', error);
+      console.error("Category insight generation error:", error);
       return this.getFallbackCategoryInsight(categoryExpenses, category);
     }
   }
 
   private prepareWeeklyData(expenses: ExpenseType[]): string {
     const total = expenses.reduce((sum, e) => sum + e.amount, 0);
-    const dailyBreakdown = expenses.reduce((acc, expense) => {
-      const day = expense.date.toLocaleDateString('en-US', { weekday: 'long' });
-      acc[day] = (acc[day] || 0) + expense.amount;
-      return acc;
-    }, {} as Record<string, number>);
+    const dailyBreakdown = expenses.reduce(
+      (acc, expense) => {
+        const day = expense.date.toLocaleDateString("en-US", { weekday: "long" });
+        acc[day] = (acc[day] || 0) + expense.amount;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
-    const categoryBreakdown = expenses.reduce((acc, expense) => {
-      acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
-      return acc;
-    }, {} as Record<string, number>);
+    const categoryBreakdown = expenses.reduce(
+      (acc, expense) => {
+        acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     return `
 Week Summary:
@@ -274,27 +289,29 @@ Week Summary:
 Daily Breakdown:
 ${Object.entries(dailyBreakdown)
   .map(([day, amount]) => `- ${day}: $${amount.toFixed(2)}`)
-  .join('\n')}
+  .join("\n")}
 
 Category Breakdown:
 ${Object.entries(categoryBreakdown)
-  .sort(([,a], [,b]) => b - a)
+  .sort(([, a], [, b]) => b - a)
   .map(([category, amount]) => `- ${category}: $${amount.toFixed(2)}`)
-  .join('\n')}
+  .join("\n")}
 
-Largest expense: $${Math.max(...expenses.map(e => e.amount)).toFixed(2)}
-Most frequent category: ${Object.entries(categoryBreakdown).reduce((a, b) => categoryBreakdown[a[0]] > categoryBreakdown[b[0]] ? a : b)[0]}
+Largest expense: $${Math.max(...expenses.map((e) => e.amount)).toFixed(2)}
+Most frequent category: ${Object.entries(categoryBreakdown).reduce((a, b) => (categoryBreakdown[a[0]] > categoryBreakdown[b[0]] ? a : b))[0]}
 `;
   }
 
   private prepareStoryData(expenses: ExpenseType[], timeframe: string): string {
     const total = expenses.reduce((sum, e) => sum + e.amount, 0);
-    const sortedExpenses = expenses.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    
+    const sortedExpenses = expenses.sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+
     const milestones = [
       sortedExpenses[0], // First expense
-      ...sortedExpenses.filter(e => e.amount > 100).slice(0, 3), // Large expenses
-      sortedExpenses[sortedExpenses.length - 1] // Last expense
+      ...sortedExpenses.filter((e) => e.amount > 100).slice(0, 3), // Large expenses
+      sortedExpenses[sortedExpenses.length - 1], // Last expense
     ].filter(Boolean);
 
     return `
@@ -304,9 +321,12 @@ ${timeframe.charAt(0).toUpperCase() + timeframe.slice(1)} Overview:
 - Timeframe: ${sortedExpenses[0]?.date.toLocaleDateString()} to ${sortedExpenses[sortedExpenses.length - 1]?.date.toLocaleDateString()}
 
 Key Moments:
-${milestones.map((expense, index) => 
-  `${index + 1}. ${expense.date.toLocaleDateString()}: $${expense.amount.toFixed(2)} on ${expense.description} (${expense.category})`
-).join('\n')}
+${milestones
+  .map(
+    (expense, index) =>
+      `${index + 1}. ${expense.date.toLocaleDateString()}: $${expense.amount.toFixed(2)} on ${expense.description} (${expense.category})`,
+  )
+  .join("\n")}
 
 Spending Pattern:
 ${this.getSpendingPattern(expenses)}
@@ -316,10 +336,10 @@ ${this.getSpendingPattern(expenses)}
   private prepareCategoryData(expenses: ExpenseType[], category: string): string {
     const total = expenses.reduce((sum, e) => sum + e.amount, 0);
     const average = total / expenses.length;
-    const recentMonth = expenses.filter(e => 
-      new Date(e.date) >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    const recentMonth = expenses.filter(
+      (e) => new Date(e.date) >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     );
-    
+
     return `
 ${category.charAt(0).toUpperCase() + category.slice(1)} Category Analysis:
 - Total spent: $${total.toFixed(2)} across ${expenses.length} transactions
@@ -327,22 +347,26 @@ ${category.charAt(0).toUpperCase() + category.slice(1)} Category Analysis:
 - Recent month: ${recentMonth.length} transactions, $${recentMonth.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}
 
 Recent transactions:
-${expenses.slice(-5).map(e => 
-  `- ${e.date.toLocaleDateString()}: $${e.amount.toFixed(2)} on ${e.description}`
-).join('\n')}
+${expenses
+  .slice(-5)
+  .map((e) => `- ${e.date.toLocaleDateString()}: $${e.amount.toFixed(2)} on ${e.description}`)
+  .join("\n")}
 
-Frequency: ${expenses.length > 20 ? 'Very frequent' : expenses.length > 10 ? 'Regular' : 'Occasional'}
+Frequency: ${expenses.length > 20 ? "Very frequent" : expenses.length > 10 ? "Regular" : "Occasional"}
 `;
   }
 
   private getTopSpendingCategory(expenses: ExpenseType[]): { category: string; amount: number } {
-    const categoryTotals = expenses.reduce((acc, expense) => {
-      acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
-      return acc;
-    }, {} as Record<string, number>);
+    const categoryTotals = expenses.reduce(
+      (acc, expense) => {
+        acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
-    const [category, amount] = Object.entries(categoryTotals).reduce((a, b) => 
-      categoryTotals[a[0]] > categoryTotals[b[0]] ? a : b
+    const [category, amount] = Object.entries(categoryTotals).reduce((a, b) =>
+      categoryTotals[a[0]] > categoryTotals[b[0]] ? a : b,
     );
 
     return { category, amount };
@@ -351,12 +375,12 @@ Frequency: ${expenses.length > 20 ? 'Very frequent' : expenses.length > 10 ? 'Re
   private getSpendingPattern(expenses: ExpenseType[]): string {
     if (expenses.length < 5) return "Limited data for pattern analysis";
 
-    const weekdays = expenses.filter(e => {
+    const weekdays = expenses.filter((e) => {
       const day = new Date(e.date).getDay();
       return day >= 1 && day <= 5;
     });
 
-    const weekends = expenses.filter(e => {
+    const weekends = expenses.filter((e) => {
       const day = new Date(e.date).getDay();
       return day === 0 || day === 6;
     });
@@ -378,18 +402,18 @@ Frequency: ${expenses.length > 20 ? 'Very frequent' : expenses.length > 10 ? 'Re
     const cutoff = new Date();
 
     switch (timeframe) {
-      case 'week':
+      case "week":
         cutoff.setDate(now.getDate() - 7);
         break;
-      case 'month':
+      case "month":
         cutoff.setMonth(now.getMonth() - 1);
         break;
-      case 'quarter':
+      case "quarter":
         cutoff.setMonth(now.getMonth() - 3);
         break;
     }
 
-    return expenses.filter(e => new Date(e.date) >= cutoff);
+    return expenses.filter((e) => new Date(e.date) >= cutoff);
   }
 
   // Fallback methods for when AI is not available
@@ -397,7 +421,7 @@ Frequency: ${expenses.length > 20 ? 'Very frequent' : expenses.length > 10 ? 'Re
   private getFallbackQuickInsight(expenses: ExpenseType[]): string {
     const thisMonth = new Date();
     thisMonth.setDate(1);
-    const monthlyExpenses = expenses.filter(e => new Date(e.date) >= thisMonth);
+    const monthlyExpenses = expenses.filter((e) => new Date(e.date) >= thisMonth);
     const total = monthlyExpenses.reduce((sum, e) => sum + e.amount, 0);
     const topCategory = this.getTopSpendingCategory(monthlyExpenses);
 
@@ -406,14 +430,14 @@ Frequency: ${expenses.length > 20 ? 'Very frequent' : expenses.length > 10 ? 'Re
 
   private getFallbackWeeklyReport(expenses: ExpenseType[]) {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const weeklyExpenses = expenses.filter(e => new Date(e.date) >= weekAgo);
+    const weeklyExpenses = expenses.filter((e) => new Date(e.date) >= weekAgo);
     const total = weeklyExpenses.reduce((sum, e) => sum + e.amount, 0);
 
     return {
       summary: `This week you made ${weeklyExpenses.length} transactions totaling $${total.toFixed(2)}.`,
       highlights: ["You tracked all your expenses consistently"],
       concerns: weeklyExpenses.length > 20 ? ["High transaction frequency this week"] : [],
-      nextWeekTips: ["Continue tracking your expenses", "Review your top spending categories"]
+      nextWeekTips: ["Continue tracking your expenses", "Review your top spending categories"],
     };
   }
 
@@ -430,9 +454,9 @@ Frequency: ${expenses.length > 20 ? 'Very frequent' : expenses.length > 10 ? 'Re
 
     return {
       insight: `Your ${category} spending shows ${expenses.length} transactions totaling $${total.toFixed(2)}.`,
-      trend: 'stable' as const,
+      trend: "stable" as const,
       recommendation: `Consider setting a monthly budget of $${(total * 1.1).toFixed(2)} for ${category} expenses.`,
-      comparison: `Average transaction amount is $${average.toFixed(2)} in this category.`
+      comparison: `Average transaction amount is $${average.toFixed(2)} in this category.`,
     };
   }
 }

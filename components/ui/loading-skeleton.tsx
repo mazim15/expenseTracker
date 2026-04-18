@@ -2,20 +2,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function LoadingSkeleton() {
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="animate-fade-in space-y-6">
       <div className="space-y-3">
         <div className="relative overflow-hidden">
           <Skeleton className="h-[125px] w-full rounded-xl" />
-          <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+          <div className="animate-shimmer absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent" />
         </div>
         <div className="space-y-2">
           <div className="relative overflow-hidden">
             <Skeleton className="h-4 w-[250px]" />
-            <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+            <div className="animate-shimmer absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           </div>
           <div className="relative overflow-hidden">
             <Skeleton className="h-4 w-[200px]" />
-            <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+            <div className="animate-shimmer absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           </div>
         </div>
       </div>
@@ -30,22 +30,19 @@ export function LoadingSkeleton() {
 
 export function CardSkeleton({ delay = 0 }: { delay?: number }) {
   return (
-    <div 
-      className="space-y-3 animate-fade-in"
-      style={{ animationDelay: `${delay}ms` }}
-    >
+    <div className="animate-fade-in space-y-3" style={{ animationDelay: `${delay}ms` }}>
       <div className="relative overflow-hidden">
         <Skeleton className="h-[125px] w-full rounded-xl" />
-        <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+        <div className="animate-shimmer absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       </div>
       <div className="space-y-2">
         <div className="relative overflow-hidden">
           <Skeleton className="h-4 w-[250px]" />
-          <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+          <div className="animate-shimmer absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent" />
         </div>
         <div className="relative overflow-hidden">
           <Skeleton className="h-4 w-[200px]" />
-          <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+          <div className="animate-shimmer absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent" />
         </div>
       </div>
     </div>
@@ -77,4 +74,4 @@ export function ChartSkeleton() {
       </div>
     </div>
   );
-} 
+}

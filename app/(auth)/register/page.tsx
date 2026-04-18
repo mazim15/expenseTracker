@@ -7,7 +7,14 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -23,12 +30,12 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (password !== confirmPassword) {
       toast.error("Passwords do not match");
       return;
     }
-    
+
     try {
       setError("");
       setLoading(true);
@@ -45,13 +52,11 @@ export default function Register() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-16 flex justify-center">
+    <div className="container mx-auto flex justify-center px-4 py-16">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl">Create an account</CardTitle>
-          <CardDescription>
-            Enter your email and password to register
-          </CardDescription>
+          <CardDescription>Enter your email and password to register</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
@@ -97,7 +102,7 @@ export default function Register() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Creating account..." : "Register"}
             </Button>
-            <p className="text-sm text-center text-muted-foreground">
+            <p className="text-muted-foreground text-center text-sm">
               Already have an account?{" "}
               <Link href="/login" className="text-primary hover:underline">
                 Sign in
@@ -108,4 +113,4 @@ export default function Register() {
       </Card>
     </div>
   );
-} 
+}

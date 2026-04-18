@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Logger } from './logger';
-import { FirestoreLogAdapter, ConsoleLogAdapter } from './storage';
-import { LoggerConfig } from './types';
+import { Logger } from "./logger";
+import { FirestoreLogAdapter, ConsoleLogAdapter } from "./storage";
+import { LoggerConfig } from "./types";
 
 // Create storage adapter based on environment
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createStorageAdapter = () => {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === "production") {
     return new FirestoreLogAdapter();
   } else {
     return new ConsoleLogAdapter();
@@ -15,27 +15,27 @@ const createStorageAdapter = () => {
 
 // Default configuration
 const defaultConfig: LoggerConfig = {
-  level: process.env.NODE_ENV === 'production' ? 'INFO' : 'DEBUG',
+  level: process.env.NODE_ENV === "production" ? "INFO" : "DEBUG",
   enableConsole: true,
   enableStorage: true, // Always enable storage so logs are saved to Firestore
   adapter: new FirestoreLogAdapter(), // Always use Firestore for persistent logs
-  context: {}
+  context: {},
 };
 
 // Create and export logger instance
 export const logger = new Logger(defaultConfig);
 
 // Export everything for flexibility
-export * from './types';
-export * from './logger';
-export * from './storage';
-export * from './middleware';
+export * from "./types";
+export * from "./logger";
+export * from "./storage";
+export * from "./middleware";
 
 // Helper function to set user context
 export const setLoggerUser = (userId: string, userEmail?: string) => {
   logger.setContext({
     userId,
-    userEmail
+    userEmail,
   });
 };
 
@@ -55,7 +55,11 @@ export const logUserAction = (action: string, details?: Record<string, any>) => 
 };
 
 // Enhanced logging function that ensures userId is set
-export const logUserActionWithUserId = (userId: string, action: string, details?: Record<string, any>) => {
+export const logUserActionWithUserId = (
+  userId: string,
+  action: string,
+  details?: Record<string, any>,
+) => {
   // Temporarily set user context if not already set
   const currentUserId = logger.getContext().userId;
   if (!currentUserId && userId) {
@@ -68,11 +72,22 @@ export const logError = (error: Error, context?: string, details?: Record<string
   return logger.logError(error, context, details);
 };
 
-export const logApiCall = (method: string, route: string, statusCode: number, duration: number, details?: Record<string, any>) => {
+export const logApiCall = (
+  method: string,
+  route: string,
+  statusCode: number,
+  duration: number,
+  details?: Record<string, any>,
+) => {
   return logger.logApiCall(method, route, statusCode, duration, details);
 };
 
-export const logDatabaseOperation = (operation: string, table: string, duration?: number, details?: Record<string, any>) => {
+export const logDatabaseOperation = (
+  operation: string,
+  table: string,
+  duration?: number,
+  details?: Record<string, any>,
+) => {
   return logger.logDatabaseOperation(operation, table, duration, details);
 };
 

@@ -26,7 +26,7 @@ export default function DeleteConfirmDialog({
   onOpenChange,
   onConfirm,
   title = "Delete Confirmation",
-  description = "Are you sure you want to delete this item? This action cannot be undone."
+  description = "Are you sure you want to delete this item? This action cannot be undone.",
 }: DeleteConfirmDialogProps) {
   const [loading, setLoading] = useState(false);
 
@@ -48,17 +48,15 @@ export default function DeleteConfirmDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-destructive" />
+            <AlertTriangle className="text-destructive h-5 w-5" />
             <AlertDialogTitle>{title}</AlertDialogTitle>
           </div>
-          <AlertDialogDescription>
-            {description}
-          </AlertDialogDescription>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
-          <AlertDialogAction 
-            onClick={handleConfirm} 
+          <AlertDialogAction
+            onClick={handleConfirm}
             disabled={loading}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
           >
@@ -68,4 +66,4 @@ export default function DeleteConfirmDialog({
       </AlertDialogContent>
     </AlertDialog>
   );
-} 
+}

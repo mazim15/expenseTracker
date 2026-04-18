@@ -20,6 +20,14 @@ export function getCategoryColor(category: string): string {
 
 // Chart colors for pie charts and other visualizations
 export const CHART_COLORS = [
-  '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', 
-  '#FF6B6B', '#6B8E23', '#483D8B', '#CD853F', '#708090'
+  "#0088FE",
+  "#00C49F",
+  "#FFBB28",
+  "#FF8042",
+  "#8884D8",
+  "#FF6B6B",
+  "#6B8E23",
+  "#483D8B",
+  "#CD853F",
+  "#708090",
 ] as const;

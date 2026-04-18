@@ -10,20 +10,16 @@ export const metadata: Metadata = {
   description: "Track and manage your expenses",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-background font-sans antialiased transition-colors duration-300 overflow-x-hidden">
+      <body className="bg-background min-h-screen overflow-x-hidden font-sans antialiased transition-colors duration-300">
         <Providers>
           <ErrorBoundary>
-            <div className="flex min-h-screen flex-col relative">
-              <div className="gradient-mesh fixed inset-0 opacity-30 pointer-events-none" />
+            <div className="relative flex min-h-screen flex-col">
+              <div className="gradient-mesh pointer-events-none fixed inset-0 opacity-30" />
               <Header />
-              <main className="flex-1 relative z-10">
+              <main className="relative z-10 flex-1">
                 <ErrorBoundary>{children}</ErrorBoundary>
               </main>
               <Footer />

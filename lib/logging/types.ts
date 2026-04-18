@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
 
-export type LogCategory = 
-  | 'USER_ACTION' 
-  | 'SYSTEM' 
-  | 'ERROR' 
-  | 'PERFORMANCE' 
-  | 'AUTHENTICATION'
-  | 'DATABASE'
-  | 'API';
+export type LogCategory =
+  | "USER_ACTION"
+  | "SYSTEM"
+  | "ERROR"
+  | "PERFORMANCE"
+  | "AUTHENTICATION"
+  | "DATABASE"
+  | "API";
 
 export interface LogMetadata {
   userAgent?: string;

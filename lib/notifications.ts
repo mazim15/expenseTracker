@@ -8,14 +8,11 @@ import { NotificationItem } from "@/types/notification";
 export async function getNotifications(userId: string): Promise<NotificationItem[]> {
   try {
     const notificationsRef = collection(db, "notifications");
-    const q = query(
-      notificationsRef,
-      where("userId", "==", userId)
-    );
-    
+    const q = query(notificationsRef, where("userId", "==", userId));
+
     const querySnapshot = await getDocs(q);
     const notifications: NotificationItem[] = [];
-    
+
     querySnapshot.forEach((doc) => {
       const data = doc.data();
       notifications.push({
@@ -26,10 +23,10 @@ export async function getNotifications(userId: string): Promise<NotificationItem
         status: data.status,
         type: data.type,
         createdAt: data.createdAt.toDate(),
-        link: data.link || null
+        link: data.link || null,
       });
     });
-    
+
     // Sort by date, newest first
     return notifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   } catch (error) {
@@ -46,7 +43,7 @@ export async function markAsRead(notificationId: string): Promise<void> {
     const notificationRef = doc(db, "notifications", notificationId);
     await updateDoc(notificationRef, {
       status: "read",
-      updatedAt: new Date()
+      updatedAt: new Date(),
     });
   } catch (error) {
     console.error("Error marking notification as read:", error);
@@ -63,25 +60,25 @@ export async function markAllNotificationsAsRead(userId: string): Promise<boolea
     const q = query(
       notificationsRef,
       where("userId", "==", userId),
-      where("status", "==", "unread")
+      where("status", "==", "unread"),
     );
-    
+
     const querySnapshot = await getDocs(q);
-    
+
     if (querySnapshot.empty) {
       return true;
     }
-    
+
     const batch = writeBatch(db);
-    
+
     querySnapshot.forEach((doc) => {
       batch.update(doc.ref, { status: "read" });
     });
-    
+
     await batch.commit();
     return true;
   } catch (error) {
     console.error("Error marking all notifications as read:", error);
     return false;
   }
-} 
+}

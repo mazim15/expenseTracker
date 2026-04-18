@@ -116,7 +116,11 @@ export function FloatingElement({ children, className }: PageTransitionProps) {
   );
 }
 
-export function SlideInFromLeft({ children, className, delay = 0 }: PageTransitionProps & { delay?: number }) {
+export function SlideInFromLeft({
+  children,
+  className,
+  delay = 0,
+}: PageTransitionProps & { delay?: number }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: -50 }}
@@ -129,7 +133,11 @@ export function SlideInFromLeft({ children, className, delay = 0 }: PageTransiti
   );
 }
 
-export function SlideInFromRight({ children, className, delay = 0 }: PageTransitionProps & { delay?: number }) {
+export function SlideInFromRight({
+  children,
+  className,
+  delay = 0,
+}: PageTransitionProps & { delay?: number }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: 50 }}
@@ -142,7 +150,11 @@ export function SlideInFromRight({ children, className, delay = 0 }: PageTransit
   );
 }
 
-export function ScaleIn({ children, className, delay = 0 }: PageTransitionProps & { delay?: number }) {
+export function ScaleIn({
+  children,
+  className,
+  delay = 0,
+}: PageTransitionProps & { delay?: number }) {
   try {
     return (
       <motion.div

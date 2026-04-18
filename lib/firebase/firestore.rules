@@ -16,9 +16,27 @@ service cloud.firestore {
       // Allow users to read and write only their own user document
       allow read, write: if isOwner(userId);
       
-      // Expenses subcollection
+      // Expenses subcollection — ownership + field-level validation on writes
       match /expenses/{expenseId} {
-        allow read, write: if isOwner(userId);
+        function validExpense(data) {
+          return data.amount is number
+              && data.amount > 0
+              && data.amount <= 1000000
+              && data.category is string
+              && data.category.size() > 0
+              && data.category.size() <= 50
+              && data.description is string
+              && data.description.size() > 0
+              && data.description.size() <= 500
+              && data.date is timestamp
+              && data.date <= request.time
+              && (!('location' in data) || (data.location is string && data.location.size() <= 200))
+              && (!('tags' in data) || (data.tags is list && data.tags.size() <= 10));
+        }
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && validExpense(request.resource.data);
+        allow update: if isOwner(userId) && validExpense(request.resource.data);
+        allow delete: if isOwner(userId);
       }
       
       // Settings subcollection - added for categories

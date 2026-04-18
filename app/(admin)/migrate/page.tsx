@@ -14,7 +14,7 @@ export default function MigratePage() {
   const handleMigration = async () => {
     setIsLoading(true);
     setResult(null);
-    
+
     try {
       const count = await copyExpensesBetweenUsers(sourceUserId, targetUserId);
       setResult(`Successfully copied ${count} expenses`);
@@ -27,40 +27,39 @@ export default function MigratePage() {
 
   return (
     <div className="container py-10">
-      <h1 className="text-2xl font-bold mb-6">Migrate User Expenses</h1>
-      
-      <div className="grid gap-4 max-w-md">
+      <h1 className="mb-6 text-2xl font-bold">Migrate User Expenses</h1>
+
+      <div className="grid max-w-md gap-4">
         <div>
-          <label className="block text-sm font-medium mb-1">Source User ID</label>
-          <Input 
-            value={sourceUserId} 
+          <label className="mb-1 block text-sm font-medium">Source User ID</label>
+          <Input
+            value={sourceUserId}
             onChange={(e) => setSourceUserId(e.target.value)}
             placeholder="Source User ID"
           />
         </div>
-        
+
         <div>
-          <label className="block text-sm font-medium mb-1">Target User ID</label>
-          <Input 
-            value={targetUserId} 
+          <label className="mb-1 block text-sm font-medium">Target User ID</label>
+          <Input
+            value={targetUserId}
             onChange={(e) => setTargetUserId(e.target.value)}
             placeholder="Target User ID"
           />
         </div>
-        
-        <Button 
-          onClick={handleMigration} 
-          disabled={isLoading || !sourceUserId || !targetUserId}
-        >
+
+        <Button onClick={handleMigration} disabled={isLoading || !sourceUserId || !targetUserId}>
           {isLoading ? "Migrating..." : "Migrate Expenses"}
         </Button>
-        
+
         {result && (
-          <div className={`mt-4 p-3 rounded ${result.startsWith('Error') ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+          <div
+            className={`mt-4 rounded p-3 ${result.startsWith("Error") ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}
+          >
             {result}
           </div>
         )}
       </div>
     </div>
   );
-} 
+}

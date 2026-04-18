@@ -1,9 +1,9 @@
 "use client";
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import React, { Component, ErrorInfo, ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 
 interface Props {
   children: ReactNode;
@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
     this.state = {
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
     };
   }
 
@@ -31,18 +31,18 @@ export class ErrorBoundary extends Component<Props, State> {
     return {
       hasError: true,
       error,
-      errorInfo: null
+      errorInfo: null,
     };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({
       error,
-      errorInfo
+      errorInfo,
     });
 
     // Log the error
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
 
     // Call the onError callback if provided
     if (this.props.onError) {
@@ -54,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
     });
   };
 
@@ -66,20 +66,21 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex items-center justify-center min-h-[400px] p-4">
-          <Card className="w-full max-w-md mx-auto">
+        <div className="flex min-h-[400px] items-center justify-center p-4">
+          <Card className="mx-auto w-full max-w-md">
             <CardHeader className="text-center">
-              <div className="flex justify-center mb-4">
-                <AlertTriangle className="h-12 w-12 text-destructive" />
+              <div className="mb-4 flex justify-center">
+                <AlertTriangle className="text-destructive h-12 w-12" />
               </div>
               <CardTitle>Something went wrong</CardTitle>
               <CardDescription>
-                An unexpected error occurred. Please try refreshing the page or contact support if the problem persists.
+                An unexpected error occurred. Please try refreshing the page or contact support if
+                the problem persists.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {process.env.NODE_ENV === 'development' && this.state.error && (
-                <div className="text-xs text-muted-foreground bg-muted p-3 rounded-lg overflow-auto max-h-32">
+              {process.env.NODE_ENV === "development" && this.state.error && (
+                <div className="text-muted-foreground bg-muted max-h-32 overflow-auto rounded-lg p-3 text-xs">
                   <strong>Error:</strong> {this.state.error.message}
                   {this.state.errorInfo && (
                     <div className="mt-2">
@@ -96,9 +97,9 @@ export class ErrorBoundary extends Component<Props, State> {
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Try Again
                 </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => window.location.reload()} 
+                <Button
+                  variant="outline"
+                  onClick={() => window.location.reload()}
                   className="flex-1"
                 >
                   Refresh Page
@@ -118,7 +119,7 @@ export class ErrorBoundary extends Component<Props, State> {
 export function withErrorBoundary<P extends object>(
   Component: React.ComponentType<P>,
   fallback?: ReactNode,
-  onError?: (error: Error, errorInfo: ErrorInfo) => void
+  onError?: (error: Error, errorInfo: ErrorInfo) => void,
 ) {
   const WrappedComponent = (props: P) => (
     <ErrorBoundary fallback={fallback} onError={onError}>

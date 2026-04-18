@@ -17,11 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Wallet,
@@ -39,7 +35,7 @@ import {
   DollarSign,
   Shield,
   Tags,
-  X
+  X,
 } from "lucide-react";
 import { User as FirebaseUser } from "firebase/auth";
 import { cn } from "@/lib/utils";
@@ -53,9 +49,9 @@ interface ExtendedUser extends FirebaseUser {
 }
 
 export function Header() {
-  const { user, signOut } = useAuth() as { 
-    user: ExtendedUser | null; 
-    signOut: () => Promise<void> 
+  const { user, signOut } = useAuth() as {
+    user: ExtendedUser | null;
+    signOut: () => Promise<void>;
   };
   const pathname = usePathname();
   const router = useRouter();
@@ -78,40 +74,40 @@ export function Header() {
   };
 
   const navItems = [
-    { 
-      name: "Dashboard", 
-      href: "/dashboard", 
-      icon: Home, 
+    {
+      name: "Dashboard",
+      href: "/dashboard",
+      icon: Home,
       description: "Overview & insights",
-      badge: null
+      badge: null,
     },
-    { 
-      name: "Expenses", 
-      href: "/expenses", 
-      icon: CreditCard, 
+    {
+      name: "Expenses",
+      href: "/expenses",
+      icon: CreditCard,
       description: "Track spending",
-      badge: "Hot"
+      badge: "Hot",
     },
-    { 
-      name: "Analytics", 
-      href: "/analytics", 
-      icon: TrendingUp, 
+    {
+      name: "Analytics",
+      href: "/analytics",
+      icon: TrendingUp,
       description: "Financial insights",
-      badge: null
+      badge: null,
     },
-    { 
-      name: "Activity", 
-      href: "/activity", 
-      icon: Activity, 
+    {
+      name: "Activity",
+      href: "/activity",
+      icon: Activity,
       description: "System logs",
-      badge: null
+      badge: null,
     },
-    { 
-      name: "Settings", 
-      href: "/settings", 
-      icon: Settings, 
+    {
+      name: "Settings",
+      href: "/settings",
+      icon: Settings,
       description: "Preferences",
-      badge: null
+      badge: null,
     },
   ];
 
@@ -125,29 +121,29 @@ export function Header() {
 
   const getUserDisplayName = () => {
     if (user?.displayName) return user.displayName;
-    if (user?.email) return user.email.split('@')[0];
+    if (user?.email) return user.email.split("@")[0];
     return "User";
   };
 
   // Handle search functionality
   const handleSearch = (query: string) => {
     if (!query.trim()) return;
-    
+
     // Navigate to expenses page with search query
     const searchParams = new URLSearchParams();
-    searchParams.set('search', query.trim());
+    searchParams.set("search", query.trim());
     router.push(`/expenses?${searchParams.toString()}`);
-    
+
     // Close search
     setSearchOpen(false);
     setSearchQuery("");
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleSearch(searchQuery);
     }
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       setSearchOpen(false);
       setSearchQuery("");
     }
@@ -162,12 +158,12 @@ export function Header() {
   ];
 
   return (
-    <motion.header 
+    <motion.header
       className={cn(
         "sticky top-0 z-50 w-full transition-all duration-300",
-        isScrolled 
-          ? "border-b bg-background/80 backdrop-blur-xl shadow-lg supports-[backdrop-filter]:bg-background/60" 
-          : "border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+        isScrolled
+          ? "bg-background/80 supports-[backdrop-filter]:bg-background/60 border-b shadow-lg backdrop-blur-xl"
+          : "bg-background/95 supports-[backdrop-filter]:bg-background/80 border-b backdrop-blur",
       )}
       initial={{ y: -100 }}
       animate={{ y: 0 }}
@@ -175,7 +171,7 @@ export function Header() {
     >
       <div className="container flex h-16 items-center">
         {/* Logo Section */}
-        <motion.div 
+        <motion.div
           className="mr-6 flex items-center"
           whileHover={{ scale: 1.02 }}
           transition={{ type: "spring", stiffness: 400 }}
@@ -186,14 +182,14 @@ export function Header() {
               animate={{ rotate: [0, 5, -5, 0] }}
               transition={{ duration: 4, repeat: Infinity, repeatDelay: 3 }}
             >
-              <div className="absolute inset-0 bg-primary/20 rounded-full blur-md" />
-              <Wallet className="relative h-8 w-8 text-primary" />
+              <div className="bg-primary/20 absolute inset-0 rounded-full blur-md" />
+              <Wallet className="text-primary relative h-8 w-8" />
             </motion.div>
             <div className="flex flex-col">
-              <span className="text-xl font-bold bg-gradient-to-r from-primary via-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="from-primary bg-gradient-to-r via-blue-600 to-purple-600 bg-clip-text text-xl font-bold text-transparent">
                 ExpenseTracker
               </span>
-              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+              <span className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
                 Pro
               </span>
             </div>
@@ -202,7 +198,7 @@ export function Header() {
 
         {/* Desktop Navigation */}
         {user && (
-          <nav className="hidden lg:flex items-center space-x-1">
+          <nav className="hidden items-center space-x-1 lg:flex">
             {navItems.map((item, index) => (
               <motion.div
                 key={item.href}
@@ -213,27 +209,30 @@ export function Header() {
                 <Link
                   href={item.href}
                   className={cn(
-                    "relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 group",
+                    "group relative flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200",
                     isActive(item.href)
                       ? "text-primary bg-primary/10 shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
                   )}
                 >
-                  <item.icon className={cn(
-                    "h-4 w-4 transition-transform duration-200",
-                    isActive(item.href) 
-                      ? "text-primary" 
-                      : "group-hover:scale-110"
-                  )} />
+                  <item.icon
+                    className={cn(
+                      "h-4 w-4 transition-transform duration-200",
+                      isActive(item.href) ? "text-primary" : "group-hover:scale-110",
+                    )}
+                  />
                   <span>{item.name}</span>
                   {item.badge && (
-                    <Badge variant="secondary" className="h-4 px-1.5 text-[10px] bg-gradient-to-r from-orange-500 to-red-500 text-white">
+                    <Badge
+                      variant="secondary"
+                      className="h-4 bg-gradient-to-r from-orange-500 to-red-500 px-1.5 text-[10px] text-white"
+                    >
                       {item.badge}
                     </Badge>
                   )}
                   {isActive(item.href) && (
                     <motion.div
-                      className="absolute bottom-0 left-1/2 w-1 h-1 bg-primary rounded-full"
+                      className="bg-primary absolute bottom-0 left-1/2 h-1 w-1 rounded-full"
                       layoutId="activeIndicator"
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
@@ -253,11 +252,11 @@ export function Header() {
             <>
               {/* Enhanced Quick Search */}
               <motion.div
-                className="hidden md:flex items-center relative"
+                className="relative hidden items-center md:flex"
                 initial={{ width: 40, opacity: 0 }}
-                animate={{ 
-                  width: searchOpen ? 280 : 40, 
-                  opacity: 1 
+                animate={{
+                  width: searchOpen ? 280 : 40,
+                  opacity: 1,
                 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
               >
@@ -266,7 +265,7 @@ export function Header() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setSearchOpen(true)}
-                    className="h-9 w-9 p-0 hover:bg-muted/80"
+                    className="hover:bg-muted/80 h-9 w-9 p-0"
                   >
                     <Search className="h-4 w-4" />
                   </Button>
@@ -278,17 +277,17 @@ export function Header() {
                     transition={{ delay: 0.1 }}
                   >
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                       <Input
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={handleSearchKeyDown}
                         placeholder="Search expenses, categories, amounts..."
-                        className="h-9 pl-9 pr-20 bg-muted/50 border-0 focus:bg-background/80 transition-colors"
+                        className="bg-muted/50 focus:bg-background/80 h-9 border-0 pr-20 pl-9 transition-colors"
                         autoFocus
                         onBlur={(e) => {
                           // Don't close if clicking on search button or suggestions
-                          if (!e.relatedTarget?.closest('.search-container')) {
+                          if (!e.relatedTarget?.closest(".search-container")) {
                             setTimeout(() => {
                               setSearchOpen(false);
                               setSearchQuery("");
@@ -296,8 +295,8 @@ export function Header() {
                           }
                         }}
                       />
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                        <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+                      <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">
+                        <kbd className="bg-muted text-muted-foreground hidden h-5 items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-100 select-none sm:inline-flex">
                           ↵
                         </kbd>
                         <Button
@@ -307,7 +306,7 @@ export function Header() {
                             setSearchOpen(false);
                             setSearchQuery("");
                           }}
-                          className="h-5 w-5 p-0 hover:bg-muted-foreground/20"
+                          className="hover:bg-muted-foreground/20 h-5 w-5 p-0"
                         >
                           <X className="h-3 w-3" />
                         </Button>
@@ -317,47 +316,53 @@ export function Header() {
                     {/* Search Suggestions Dropdown */}
                     {searchQuery.trim() && (
                       <motion.div
-                        className="search-container absolute top-full left-0 right-0 mt-2 bg-background/95 backdrop-blur-lg rounded-lg border shadow-lg z-50"
+                        className="search-container bg-background/95 absolute top-full right-0 left-0 z-50 mt-2 rounded-lg border shadow-lg backdrop-blur-lg"
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <div className="p-2 space-y-1">
-                          <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
+                        <div className="space-y-1 p-2">
+                          <div className="text-muted-foreground px-2 py-1 text-xs font-medium">
                             Search in expenses
                           </div>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleSearch(searchQuery)}
-                            className="w-full justify-start h-8 px-2 text-left"
+                            className="h-8 w-full justify-start px-2 text-left"
                           >
-                            <Search className="h-3 w-3 mr-2 text-muted-foreground" />
-                            <span className="truncate">&quot;{searchQuery}&quot; in descriptions</span>
+                            <Search className="text-muted-foreground mr-2 h-3 w-3" />
+                            <span className="truncate">
+                              &quot;{searchQuery}&quot; in descriptions
+                            </span>
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleSearch(`amount:${searchQuery}`)}
-                            className="w-full justify-start h-8 px-2 text-left"
+                            className="h-8 w-full justify-start px-2 text-left"
                           >
-                            <DollarSign className="h-3 w-3 mr-2 text-muted-foreground" />
+                            <DollarSign className="text-muted-foreground mr-2 h-3 w-3" />
                             <span className="truncate">Amount: {searchQuery}</span>
                           </Button>
-                          {searchQuery.toLowerCase().match(/^(food|transport|shopping|entertainment|utilities|healthcare|education|personal|other)/) && (
+                          {searchQuery
+                            .toLowerCase()
+                            .match(
+                              /^(food|transport|shopping|entertainment|utilities|healthcare|education|personal|other)/,
+                            ) && (
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleSearch(`category:${searchQuery}`)}
-                              className="w-full justify-start h-8 px-2 text-left"
+                              className="h-8 w-full justify-start px-2 text-left"
                             >
-                              <Tags className="h-3 w-3 mr-2 text-muted-foreground" />
+                              <Tags className="text-muted-foreground mr-2 h-3 w-3" />
                               <span className="truncate">Category: {searchQuery}</span>
                             </Button>
                           )}
                         </div>
                         <div className="border-t p-2">
-                          <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
+                          <div className="text-muted-foreground px-2 py-1 text-xs font-medium">
                             Quick navigation
                           </div>
                           <div className="space-y-1">
@@ -371,13 +376,13 @@ export function Header() {
                                   setSearchOpen(false);
                                   setSearchQuery("");
                                 }}
-                                className="w-full justify-between h-8 px-2"
+                                className="h-8 w-full justify-between px-2"
                               >
                                 <div className="flex items-center">
-                                  <item.icon className="h-3 w-3 mr-2 text-muted-foreground" />
+                                  <item.icon className="text-muted-foreground mr-2 h-3 w-3" />
                                   <span>{item.name}</span>
                                 </div>
-                                <kbd className="h-4 select-none items-center gap-1 rounded border bg-muted px-1 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+                                <kbd className="bg-muted text-muted-foreground h-4 items-center gap-1 rounded border px-1 font-mono text-[10px] font-medium opacity-100 select-none">
                                   {item.shortcut}
                                 </kbd>
                               </Button>
@@ -391,11 +396,12 @@ export function Header() {
               </motion.div>
 
               {/* Quick Add Button */}
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Button size="sm" asChild className="hidden md:flex h-9 gap-2 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90">
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  size="sm"
+                  asChild
+                  className="from-primary hover:from-primary/90 hidden h-9 gap-2 bg-gradient-to-r to-blue-600 hover:to-blue-600/90 md:flex"
+                >
                   <Link href="/expenses?add=true">
                     <Plus className="h-4 w-4" />
                     Add
@@ -416,18 +422,15 @@ export function Header() {
               {/* User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                     <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                       <Avatar className="h-9 w-9">
                         <AvatarImage src={user.photoURL || undefined} />
-                        <AvatarFallback className="bg-gradient-to-br from-primary/20 to-blue-600/20 text-primary font-semibold text-sm">
+                        <AvatarFallback className="from-primary/20 text-primary bg-gradient-to-br to-blue-600/20 text-sm font-semibold">
                           {userInitials}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 rounded-full border-2 border-background" />
+                      <div className="border-background absolute -right-1 -bottom-1 h-3 w-3 rounded-full border-2 bg-green-500" />
                     </Button>
                   </motion.div>
                 </DropdownMenuTrigger>
@@ -437,24 +440,27 @@ export function Header() {
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
                           <AvatarImage src={user.photoURL || undefined} />
-                          <AvatarFallback className="bg-gradient-to-br from-primary/20 to-blue-600/20 text-primary font-semibold">
+                          <AvatarFallback className="from-primary/20 text-primary bg-gradient-to-br to-blue-600/20 font-semibold">
                             {userInitials}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">
-                          <p className="text-sm font-medium leading-none">{getUserDisplayName()}</p>
-                          <p className="text-xs leading-none text-muted-foreground mt-1">
+                          <p className="text-sm leading-none font-medium">{getUserDisplayName()}</p>
+                          <p className="text-muted-foreground mt-1 text-xs leading-none">
                             {user.email}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 pt-2">
-                        <Badge variant="secondary" className="text-xs bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-green-400">
-                          <Shield className="h-3 w-3 mr-1" />
+                        <Badge
+                          variant="secondary"
+                          className="bg-gradient-to-r from-green-100 to-emerald-100 text-xs text-green-700 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-green-400"
+                        >
+                          <Shield className="mr-1 h-3 w-3" />
                           Pro User
                         </Badge>
                         <Badge variant="outline" className="text-xs">
-                          <Star className="h-3 w-3 mr-1 fill-yellow-400 text-yellow-400" />
+                          <Star className="mr-1 h-3 w-3 fill-yellow-400 text-yellow-400" />
                           Premium
                         </Badge>
                       </div>
@@ -501,7 +507,10 @@ export function Header() {
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => signOut()} className="text-red-600 focus:text-red-600 flex items-center gap-2">
+                  <DropdownMenuItem
+                    onClick={() => signOut()}
+                    className="flex items-center gap-2 text-red-600 focus:text-red-600"
+                  >
                     <LogOut className="h-4 w-4" />
                     Log out
                   </DropdownMenuItem>
@@ -517,20 +526,20 @@ export function Header() {
                     </Button>
                   </SheetTrigger>
                   <SheetContent side="right" className="w-80">
-                    <div className="flex flex-col h-full">
-                      <div className="flex items-center gap-3 mb-6">
+                    <div className="flex h-full flex-col">
+                      <div className="mb-6 flex items-center gap-3">
                         <Avatar className="h-12 w-12">
                           <AvatarImage src={user.photoURL || undefined} />
-                          <AvatarFallback className="bg-gradient-to-br from-primary/20 to-blue-600/20 text-primary font-semibold text-lg">
+                          <AvatarFallback className="from-primary/20 text-primary bg-gradient-to-br to-blue-600/20 text-lg font-semibold">
                             {userInitials}
                           </AvatarFallback>
                         </Avatar>
                         <div>
                           <p className="font-semibold">{getUserDisplayName()}</p>
-                          <p className="text-sm text-muted-foreground">{user.email}</p>
+                          <p className="text-muted-foreground text-sm">{user.email}</p>
                         </div>
                       </div>
-                      
+
                       <nav className="flex flex-col space-y-2">
                         {navItems.map((item) => (
                           <Link
@@ -538,16 +547,18 @@ export function Header() {
                             href={item.href}
                             onClick={() => setMobileMenuOpen(false)}
                             className={cn(
-                              "flex items-center gap-3 p-3 rounded-lg text-sm font-medium transition-colors",
+                              "flex items-center gap-3 rounded-lg p-3 text-sm font-medium transition-colors",
                               isActive(item.href)
                                 ? "text-primary bg-primary/10"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted",
                             )}
                           >
                             <item.icon className="h-5 w-5" />
                             <div className="flex flex-col">
                               <span>{item.name}</span>
-                              <span className="text-xs text-muted-foreground">{item.description}</span>
+                              <span className="text-muted-foreground text-xs">
+                                {item.description}
+                              </span>
                             </div>
                             {item.badge && (
                               <Badge variant="secondary" className="ml-auto text-xs">
@@ -558,15 +569,15 @@ export function Header() {
                         ))}
                       </nav>
 
-                      <div className="mt-auto pt-6 border-t space-y-2">
+                      <div className="mt-auto space-y-2 border-t pt-6">
                         <Button asChild className="w-full">
                           <Link href="/expenses?add=true" onClick={() => setMobileMenuOpen(false)}>
-                            <Plus className="h-4 w-4 mr-2" />
+                            <Plus className="mr-2 h-4 w-4" />
                             Add Expense
                           </Link>
                         </Button>
                         <Button variant="outline" onClick={() => signOut()} className="w-full">
-                          <LogOut className="h-4 w-4 mr-2" />
+                          <LogOut className="mr-2 h-4 w-4" />
                           Sign Out
                         </Button>
                       </div>
@@ -580,11 +591,11 @@ export function Header() {
               <Button variant="ghost" asChild className="hidden sm:flex">
                 <Link href="/login">Login</Link>
               </Button>
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Button asChild className="bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90">
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  asChild
+                  className="from-primary hover:from-primary/90 bg-gradient-to-r to-blue-600 hover:to-blue-600/90"
+                >
                   <Link href="/register">Get Started</Link>
                 </Button>
               </motion.div>
@@ -594,4 +605,4 @@ export function Header() {
       </div>
     </motion.header>
   );
-} 
+}

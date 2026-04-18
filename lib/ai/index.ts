@@ -1,11 +1,11 @@
 // Main AI services exports
-export { GeminiClient } from './geminiClient';
-export { SmartCategorizationService } from './smartCategorization';
-export { PatternAnalysisService } from './patternAnalysis';
-export { AnomalyDetectionService } from './anomalyDetection';
-export { RecommendationService } from './recommendations';
-export { InsightsService } from './insights';
-export { PredictiveAnalyticsService } from './predictiveAnalytics';
+export { GeminiClient } from "./geminiClient";
+export { SmartCategorizationService } from "./smartCategorization";
+export { PatternAnalysisService } from "./patternAnalysis";
+export { AnomalyDetectionService } from "./anomalyDetection";
+export { RecommendationService } from "./recommendations";
+export { InsightsService } from "./insights";
+export { PredictiveAnalyticsService } from "./predictiveAnalytics";
 
 // Re-export types for convenience
 export type {
@@ -18,22 +18,22 @@ export type {
   PredictiveAnalysis,
   AIInsightsResponse,
   SmartCategorizationRequest,
-  SmartCategorizationResponse
-} from '@/types/ai';
+  SmartCategorizationResponse,
+} from "@/types/ai";
 
 // Main AI service orchestrator
-import { ExpenseType } from '@/types/expense';
-import { SmartCategorizationService } from './smartCategorization';
-import { PatternAnalysisService } from './patternAnalysis';
-import { AnomalyDetectionService } from './anomalyDetection';
-import { RecommendationService } from './recommendations';
-import { InsightsService } from './insights';
-import { PredictiveAnalyticsService } from './predictiveAnalytics';
-import { AIInsightsResponse } from '@/types/ai';
+import { ExpenseType } from "@/types/expense";
+import { SmartCategorizationService } from "./smartCategorization";
+import { PatternAnalysisService } from "./patternAnalysis";
+import { AnomalyDetectionService } from "./anomalyDetection";
+import { RecommendationService } from "./recommendations";
+import { InsightsService } from "./insights";
+import { PredictiveAnalyticsService } from "./predictiveAnalytics";
+import { AIInsightsResponse } from "@/types/ai";
 
 export class AIService {
   private static instance: AIService;
-  
+
   private smartCategorization: SmartCategorizationService;
   private patternAnalysis: PatternAnalysisService;
   private anomalyDetection: AnomalyDetectionService;
@@ -62,7 +62,7 @@ export class AIService {
     return this.smartCategorization.suggestCategory({
       description,
       amount,
-      merchant
+      merchant,
     });
   }
 
@@ -102,7 +102,11 @@ export class AIService {
     return this.insights.generateCategoryInsight(expenses, category);
   }
 
-  async getBudgetForecast(expenses: ExpenseType[], currentBudgets?: Record<string, number>, timeframe?: 'next_month' | 'next_quarter' | 'next_year') {
+  async getBudgetForecast(
+    expenses: ExpenseType[],
+    currentBudgets?: Record<string, number>,
+    timeframe?: "next_month" | "next_quarter" | "next_year",
+  ) {
     return this.predictiveAnalytics.generateBudgetForecast(expenses, currentBudgets, timeframe);
   }
 
@@ -120,18 +124,18 @@ export class AIService {
       this.smartCategorization.suggestCategory({
         description: expense.description,
         amount: expense.amount,
-        userHistory: userHistory.slice(-10).map(e => ({
+        userHistory: userHistory.slice(-10).map((e) => ({
           category: e.category,
-          description: e.description
-        }))
+          description: e.description,
+        })),
       }),
-      this.anomalyDetection.checkSingleTransaction(expense, userHistory)
+      this.anomalyDetection.checkSingleTransaction(expense, userHistory),
     ]);
 
     return {
       categorySuggestion,
       anomaly,
-      isUnusual: anomaly !== null
+      isUnusual: anomaly !== null,
     };
   }
 

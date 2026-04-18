@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
-import { getExpenses, addExpense, updateExpense, deleteExpense } from '@/lib/expenses';
-import { ExpenseType } from '@/types/expense';
-import { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { useState, useCallback, useEffect } from "react";
+import { getExpenses, addExpense, updateExpense, deleteExpense } from "@/lib/expenses";
+import { ExpenseType } from "@/types/expense";
+import { QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 
 export interface UseExpensesReturn {
   expenses: ExpenseType[];
@@ -11,7 +11,7 @@ export interface UseExpensesReturn {
   lastVisible: QueryDocumentSnapshot<DocumentData> | null;
   loadExpenses: () => Promise<void>;
   loadMoreExpenses: () => Promise<void>;
-  addNewExpense: (expense: Omit<ExpenseType, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addNewExpense: (expense: Omit<ExpenseType, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   updateExistingExpense: (expenseId: string, expenseData: Partial<ExpenseType>) => Promise<void>;
   removeExpense: (expenseId: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -28,17 +28,17 @@ export function useExpenses(userId: string): UseExpensesReturn {
 
   const loadExpenses = useCallback(async () => {
     if (!userId) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      
+
       const result = await getExpenses(userId, EXPENSES_PER_PAGE);
       setExpenses(result.expenses);
       setLastVisible(result.lastVisible);
       setHasMore(result.hasMore);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load expenses');
+      setError(err instanceof Error ? err.message : "Failed to load expenses");
     } finally {
       setLoading(false);
     }
@@ -46,69 +46,80 @@ export function useExpenses(userId: string): UseExpensesReturn {
 
   const loadMoreExpenses = useCallback(async () => {
     if (!userId || !hasMore || !lastVisible || loading) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      
+
       const result = await getExpenses(userId, EXPENSES_PER_PAGE, lastVisible);
-      setExpenses(prev => [...prev, ...result.expenses]);
+      setExpenses((prev) => [...prev, ...result.expenses]);
       setLastVisible(result.lastVisible);
       setHasMore(result.hasMore);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load more expenses');
+      setError(err instanceof Error ? err.message : "Failed to load more expenses");
     } finally {
       setLoading(false);
     }
   }, [userId, hasMore, lastVisible, loading]);
 
-  const addNewExpense = useCallback(async (expense: Omit<ExpenseType, 'id' | 'createdAt' | 'updatedAt'>) => {
-    if (!userId) return;
-    
-    try {
-      setError(null);
-      await addExpense(expense, userId);
-      // Refresh the list to show the new expense
-      await loadExpenses();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add expense');
-      throw err;
-    }
-  }, [userId, loadExpenses]);
+  const addNewExpense = useCallback(
+    async (expense: Omit<ExpenseType, "id" | "createdAt" | "updatedAt">) => {
+      if (!userId) return;
 
-  const updateExistingExpense = useCallback(async (expenseId: string, expenseData: Partial<ExpenseType>) => {
-    if (!userId) return;
-    
-    try {
-      setError(null);
-      await updateExpense(userId, expenseId, expenseData);
-      
-      // Update the expense in the local state
-      setExpenses(prev => prev.map(expense => 
-        expense.id === expenseId 
-          ? { ...expense, ...expenseData, updatedAt: new Date() }
-          : expense
-      ));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update expense');
-      throw err;
-    }
-  }, [userId]);
+      try {
+        setError(null);
+        await addExpense(expense, userId);
+        // Refresh the list to show the new expense
+        await loadExpenses();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to add expense");
+        throw err;
+      }
+    },
+    [userId, loadExpenses],
+  );
 
-  const removeExpense = useCallback(async (expenseId: string) => {
-    if (!userId) return;
-    
-    try {
-      setError(null);
-      await deleteExpense(expenseId, userId);
-      
-      // Remove the expense from local state
-      setExpenses(prev => prev.filter(expense => expense.id !== expenseId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete expense');
-      throw err;
-    }
-  }, [userId]);
+  const updateExistingExpense = useCallback(
+    async (expenseId: string, expenseData: Partial<ExpenseType>) => {
+      if (!userId) return;
+
+      try {
+        setError(null);
+        await updateExpense(userId, expenseId, expenseData);
+
+        // Update the expense in the local state
+        setExpenses((prev) =>
+          prev.map((expense) =>
+            expense.id === expenseId
+              ? { ...expense, ...expenseData, updatedAt: new Date() }
+              : expense,
+          ),
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update expense");
+        throw err;
+      }
+    },
+    [userId],
+  );
+
+  const removeExpense = useCallback(
+    async (expenseId: string) => {
+      if (!userId) return;
+
+      try {
+        setError(null);
+        await deleteExpense(expenseId, userId);
+
+        // Remove the expense from local state
+        setExpenses((prev) => prev.filter((expense) => expense.id !== expenseId));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to delete expense");
+        throw err;
+      }
+    },
+    [userId],
+  );
 
   const refresh = useCallback(async () => {
     setExpenses([]);
@@ -135,6 +146,6 @@ export function useExpenses(userId: string): UseExpensesReturn {
     addNewExpense,
     updateExistingExpense,
     removeExpense,
-    refresh
+    refresh,
   };
 }

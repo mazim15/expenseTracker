@@ -16,7 +16,7 @@ export function ActivityPrivacyInfo() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Eye className="h-4 w-4 text-blue-600" />
@@ -24,32 +24,40 @@ export function ActivityPrivacyInfo() {
             </div>
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">Actions</Badge>
+                <Badge variant="outline" className="text-xs">
+                  Actions
+                </Badge>
                 <span className="text-blue-800 dark:text-blue-200">
                   Expense creation, updates, and deletions
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">Auth</Badge>
+                <Badge variant="outline" className="text-xs">
+                  Auth
+                </Badge>
                 <span className="text-blue-800 dark:text-blue-200">
                   Login, logout, and password resets
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">Features</Badge>
+                <Badge variant="outline" className="text-xs">
+                  Features
+                </Badge>
                 <span className="text-blue-800 dark:text-blue-200">
                   Receipt uploads and analysis
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">Performance</Badge>
+                <Badge variant="outline" className="text-xs">
+                  Performance
+                </Badge>
                 <span className="text-blue-800 dark:text-blue-200">
                   App performance and load times
                 </span>
               </div>
             </div>
           </div>
-          
+
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-blue-600" />
@@ -63,13 +71,13 @@ export function ActivityPrivacyInfo() {
             </div>
           </div>
         </div>
-        
+
         <Alert className="border-blue-300 bg-blue-100 dark:border-blue-700 dark:bg-blue-900">
           <Info className="h-4 w-4" />
           <AlertDescription className="text-blue-900 dark:text-blue-100">
-            <strong>Privacy First:</strong> Your activity data is private and encrypted. 
-            We only track actions to help improve your experience and debug issues.
-            You can export or request deletion of your data at any time.
+            <strong>Privacy First:</strong> Your activity data is private and encrypted. We only
+            track actions to help improve your experience and debug issues. You can export or
+            request deletion of your data at any time.
           </AlertDescription>
         </Alert>
       </CardContent>

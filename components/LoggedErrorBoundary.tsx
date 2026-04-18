@@ -1,7 +1,7 @@
 "use client";
 
-import React from 'react';
-import { logErrorBoundary } from '@/lib/logging/middleware';
+import React from "react";
+import { logErrorBoundary } from "@/lib/logging/middleware";
 
 interface Props {
   children: React.ReactNode;
@@ -41,9 +41,9 @@ export class LoggedErrorBoundary extends React.Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-            <div className="flex items-center mb-4">
+        <div className="flex min-h-screen items-center justify-center bg-gray-50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+            <div className="mb-4 flex items-center">
               <div className="flex-shrink-0">
                 <svg
                   className="h-8 w-8 text-red-400"
@@ -60,23 +60,22 @@ export class LoggedErrorBoundary extends React.Component<Props, State> {
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Something went wrong
-                </h3>
+                <h3 className="text-lg font-medium text-gray-900">Something went wrong</h3>
                 <div className="mt-2 text-sm text-gray-500">
                   <p>
-                    An unexpected error occurred. Our team has been notified and is working to fix the issue.
+                    An unexpected error occurred. Our team has been notified and is working to fix
+                    the issue.
                   </p>
                 </div>
               </div>
             </div>
-            
+
             <div className="mt-4">
               <details className="mb-4">
                 <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
                   Show error details
                 </summary>
-                <div className="mt-2 p-3 bg-gray-100 rounded text-xs font-mono text-gray-700 overflow-auto max-h-40">
+                <div className="mt-2 max-h-40 overflow-auto rounded bg-gray-100 p-3 font-mono text-xs text-gray-700">
                   <div className="font-semibold">{this.state.error.name}:</div>
                   <div className="mb-2">{this.state.error.message}</div>
                   {this.state.error.stack && (
@@ -84,17 +83,17 @@ export class LoggedErrorBoundary extends React.Component<Props, State> {
                   )}
                 </div>
               </details>
-              
+
               <div className="flex space-x-3">
                 <button
                   onClick={() => this.setState({ hasError: false, error: null })}
-                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors"
+                  className="flex-1 rounded bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
                 >
                   Try again
                 </button>
                 <button
                   onClick={() => window.location.reload()}
-                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400 transition-colors"
+                  className="flex-1 rounded bg-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-400"
                 >
                   Reload page
                 </button>
@@ -112,6 +111,6 @@ export class LoggedErrorBoundary extends React.Component<Props, State> {
 // Hook version for functional components
 export function useErrorHandler() {
   return (error: Error, errorInfo?: React.ErrorInfo) => {
-    logErrorBoundary(error, errorInfo || { componentStack: '' });
+    logErrorBoundary(error, errorInfo || { componentStack: "" });
   };
 }

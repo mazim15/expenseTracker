@@ -3,11 +3,11 @@ export interface NotificationType {
   userId: string;
   title: string;
   message: string;
-  status: 'read' | 'unread';
-  type: 'info' | 'warning' | 'error' | 'success';
+  status: "read" | "unread";
+  type: "info" | "warning" | "error" | "success";
   createdAt: Date;
   updatedAt?: Date;
   link?: string | null;
 }
 
-export type NotificationItem = NotificationType; 
+export type NotificationItem = NotificationType;

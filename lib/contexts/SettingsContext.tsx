@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 interface UserSettings {
   currency: string;
@@ -13,15 +13,15 @@ interface UserSettings {
 interface SettingsContextType {
   settings: UserSettings;
   updateSettings: (newSettings: Partial<UserSettings>) => void;
-  isAIFeatureEnabled: (feature: 'categorization' | 'insights') => boolean;
+  isAIFeatureEnabled: (feature: "categorization" | "insights") => boolean;
 }
 
 const defaultSettings: UserSettings = {
-  currency: 'PKR',
+  currency: "PKR",
   notifications: true,
   darkMode: false,
   autoCategorizationEnabled: false,
-  aiInsightsEnabled: true
+  aiInsightsEnabled: true,
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -31,13 +31,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   // Load settings from localStorage on mount
   useEffect(() => {
-    const savedSettings = localStorage.getItem('userSettings');
+    const savedSettings = localStorage.getItem("userSettings");
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings);
         setSettings({ ...defaultSettings, ...parsed });
       } catch (error) {
-        console.error('Failed to parse user settings:', error);
+        console.error("Failed to parse user settings:", error);
       }
     }
   }, []);
@@ -45,29 +45,29 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // Apply dark mode when settings change
   useEffect(() => {
     if (settings.darkMode) {
-      document.documentElement.classList.add('dark');
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove("dark");
     }
   }, [settings.darkMode]);
 
   const updateSettings = (newSettings: Partial<UserSettings>) => {
     const updatedSettings = { ...settings, ...newSettings };
     setSettings(updatedSettings);
-    localStorage.setItem('userSettings', JSON.stringify(updatedSettings));
+    localStorage.setItem("userSettings", JSON.stringify(updatedSettings));
   };
 
-  const isAIFeatureEnabled = (feature: 'categorization' | 'insights'): boolean => {
+  const isAIFeatureEnabled = (feature: "categorization" | "insights"): boolean => {
     // Check if Gemini API key is available
-    const isAIAvailable = typeof window !== 'undefined' && 
-                         process.env.NEXT_PUBLIC_GEMINI_API_KEY !== undefined;
-    
+    const isAIAvailable =
+      typeof window !== "undefined" && process.env.NEXT_PUBLIC_GEMINI_API_KEY !== undefined;
+
     if (!isAIAvailable) return false;
-    
+
     switch (feature) {
-      case 'categorization':
+      case "categorization":
         return settings.autoCategorizationEnabled;
-      case 'insights':
+      case "insights":
         return settings.aiInsightsEnabled;
       default:
         return false;
@@ -75,11 +75,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <SettingsContext.Provider value={{
-      settings,
-      updateSettings,
-      isAIFeatureEnabled
-    }}>
+    <SettingsContext.Provider
+      value={{
+        settings,
+        updateSettings,
+        isAIFeatureEnabled,
+      }}
+    >
       {children}
     </SettingsContext.Provider>
   );
@@ -88,7 +90,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 export function useSettings() {
   const context = useContext(SettingsContext);
   if (context === undefined) {
-    throw new Error('useSettings must be used within a SettingsProvider');
+    throw new Error("useSettings must be used within a SettingsProvider");
   }
   return context;
 }

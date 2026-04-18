@@ -1,5 +1,5 @@
-import { EXPENSE_CATEGORIES as DEFAULT_CATEGORIES, ExpenseCategoryType } from '@/types/expense';
-import { getCategoryColor } from '@/lib/constants/categoryColors';
+import { EXPENSE_CATEGORIES as DEFAULT_CATEGORIES, ExpenseCategoryType } from "@/types/expense";
+import { getCategoryColor } from "@/lib/constants/categoryColors";
 
 // Get current categories from localStorage or defaults
 function getCurrentCategories(): ExpenseCategoryType[] {
@@ -19,7 +19,7 @@ function getCurrentCategories(): ExpenseCategoryType[] {
 // Get category label by value
 export function getCategoryLabel(categoryValue: string): string {
   const categories = getCurrentCategories();
-  const category = categories.find(cat => cat.value === categoryValue);
+  const category = categories.find((cat) => cat.value === categoryValue);
   return category ? category.label : categoryValue;
 }
 
@@ -31,13 +31,13 @@ export function getAllCategories(): ExpenseCategoryType[] {
 // Check if category exists
 export function isCategoryValid(categoryValue: string): boolean {
   const categories = getCurrentCategories();
-  return categories.some(cat => cat.value === categoryValue);
+  return categories.some((cat) => cat.value === categoryValue);
 }
 
 // Get category by value
 export function getCategoryByValue(categoryValue: string): ExpenseCategoryType | undefined {
   const categories = getCurrentCategories();
-  return categories.find(cat => cat.value === categoryValue);
+  return categories.find((cat) => cat.value === categoryValue);
 }
 
 // Format category for display
@@ -50,7 +50,6 @@ export function formatCategoryForDisplay(categoryValue: string): {
   return {
     label: category ? category.label : categoryValue,
     value: categoryValue,
-    color: getCategoryColor(categoryValue)
+    color: getCategoryColor(categoryValue),
   };
 }
-

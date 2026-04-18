@@ -9,21 +9,21 @@ interface EnhancedLoadingProps {
   variant?: "default" | "chart" | "pulse" | "dots";
 }
 
-export function EnhancedLoading({ 
-  message = "Loading...", 
-  size = "md", 
-  variant = "default" 
+export function EnhancedLoading({
+  message = "Loading...",
+  size = "md",
+  variant = "default",
 }: EnhancedLoadingProps) {
   const sizeClasses = {
     sm: "w-4 h-4",
-    md: "w-8 h-8", 
-    lg: "w-12 h-12"
+    md: "w-8 h-8",
+    lg: "w-12 h-12",
   };
 
   const containerSizes = {
     sm: "p-4",
     md: "p-8",
-    lg: "p-12"
+    lg: "p-12",
   };
 
   if (variant === "dots") {
@@ -33,7 +33,7 @@ export function EnhancedLoading({
           {[0, 1, 2].map((i) => (
             <motion.div
               key={i}
-              className={`bg-primary rounded-full ${size === "sm" ? "w-2 h-2" : size === "md" ? "w-3 h-3" : "w-4 h-4"}`}
+              className={`bg-primary rounded-full ${size === "sm" ? "h-2 w-2" : size === "md" ? "h-3 w-3" : "h-4 w-4"}`}
               animate={{
                 y: [0, -20, 0],
                 opacity: [0.5, 1, 0.5],
@@ -48,8 +48,8 @@ export function EnhancedLoading({
           ))}
         </div>
         {message && (
-          <motion.p 
-            className="text-sm text-muted-foreground mt-4"
+          <motion.p
+            className="text-muted-foreground mt-4 text-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
@@ -77,8 +77,8 @@ export function EnhancedLoading({
           }}
         />
         {message && (
-          <motion.p 
-            className="text-sm text-muted-foreground mt-4"
+          <motion.p
+            className="text-muted-foreground mt-4 text-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
@@ -101,7 +101,7 @@ export function EnhancedLoading({
             <BarChart3 className={`${sizeClasses[size]} text-primary`} />
           </motion.div>
           <motion.div
-            className="absolute inset-0 rounded-full border-2 border-primary/20"
+            className="border-primary/20 absolute inset-0 rounded-full border-2"
             animate={{
               scale: [1, 1.2, 1],
               opacity: [0.3, 0.8, 0.3],
@@ -114,8 +114,8 @@ export function EnhancedLoading({
           />
         </div>
         {message && (
-          <motion.p 
-            className="text-sm text-muted-foreground mt-4"
+          <motion.p
+            className="text-muted-foreground mt-4 text-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
@@ -136,8 +136,8 @@ export function EnhancedLoading({
         <Loader2 className={`${sizeClasses[size]} text-primary`} />
       </motion.div>
       {message && (
-        <motion.p 
-          className="text-sm text-muted-foreground mt-4"
+        <motion.p
+          className="text-muted-foreground mt-4 text-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
@@ -151,19 +151,19 @@ export function EnhancedLoading({
 
 export function SkeletonCard() {
   return (
-    <motion.div 
-      className="rounded-lg border bg-card p-6"
+    <motion.div
+      className="bg-card rounded-lg border p-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
       <div className="animate-pulse space-y-4">
         <div className="flex items-center justify-between">
-          <div className="h-4 bg-muted rounded w-1/3"></div>
-          <div className="h-4 bg-muted rounded w-4"></div>
+          <div className="bg-muted h-4 w-1/3 rounded"></div>
+          <div className="bg-muted h-4 w-4 rounded"></div>
         </div>
-        <div className="h-8 bg-muted rounded w-1/2"></div>
-        <div className="h-3 bg-muted rounded w-1/4"></div>
+        <div className="bg-muted h-8 w-1/2 rounded"></div>
+        <div className="bg-muted h-3 w-1/4 rounded"></div>
       </div>
     </motion.div>
   );
@@ -171,23 +171,23 @@ export function SkeletonCard() {
 
 export function SkeletonChart() {
   return (
-    <motion.div 
-      className="rounded-lg border bg-card p-6"
+    <motion.div
+      className="bg-card rounded-lg border p-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
       <div className="animate-pulse space-y-4">
         <div className="space-y-2">
-          <div className="h-6 bg-muted rounded w-1/3"></div>
-          <div className="h-4 bg-muted rounded w-1/2"></div>
+          <div className="bg-muted h-6 w-1/3 rounded"></div>
+          <div className="bg-muted h-4 w-1/2 rounded"></div>
         </div>
-        <div className="h-[300px] bg-muted rounded flex items-center justify-center">
+        <div className="bg-muted flex h-[300px] items-center justify-center rounded">
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
           >
-            <BarChart3 className="w-12 h-12 text-muted-foreground/50" />
+            <BarChart3 className="text-muted-foreground/50 h-12 w-12" />
           </motion.div>
         </div>
       </div>

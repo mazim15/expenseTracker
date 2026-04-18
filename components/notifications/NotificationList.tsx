@@ -18,9 +18,9 @@ export default function NotificationList({ notifications, onMarkAsRead }: Notifi
       case "warning":
         return <AlertTriangle className="h-4 w-4 text-amber-500" />;
       case "error":
-        return <AlertCircle className="h-4 w-4 text-destructive" />;
+        return <AlertCircle className="text-destructive h-4 w-4" />;
       default:
-        return <Bell className="h-4 w-4 text-muted-foreground" />;
+        return <Bell className="text-muted-foreground h-4 w-4" />;
     }
   };
 
@@ -29,7 +29,7 @@ export default function NotificationList({ notifications, onMarkAsRead }: Notifi
       {notifications.map((notification) => (
         <div
           key={notification.id}
-          className={`flex items-start gap-3 p-3 text-sm transition-colors hover:bg-muted/50 ${
+          className={`hover:bg-muted/50 flex items-start gap-3 p-3 text-sm transition-colors ${
             notification.status === "unread" ? "bg-muted/30" : ""
           }`}
           onClick={() => notification.status === "unread" && onMarkAsRead(notification.id)}
@@ -39,13 +39,13 @@ export default function NotificationList({ notifications, onMarkAsRead }: Notifi
             <div className="font-medium">{notification.title}</div>
             <p className="text-muted-foreground">{notification.message}</p>
             <div className="mt-1 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-muted-foreground text-xs">
                 {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
               </span>
               {notification.link && (
-                <Link 
-                  href={notification.link} 
-                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                <Link
+                  href={notification.link}
+                  className="text-primary flex items-center gap-1 text-xs hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >
                   View <ExternalLink className="h-3 w-3" />
@@ -54,10 +54,10 @@ export default function NotificationList({ notifications, onMarkAsRead }: Notifi
             </div>
           </div>
           {notification.status === "unread" && (
-            <div className="h-2 w-2 rounded-full bg-primary"></div>
+            <div className="bg-primary h-2 w-2 rounded-full"></div>
           )}
         </div>
       ))}
     </div>
   );
-} 
+}

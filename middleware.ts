@@ -1,34 +1,16 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = [
-  '/',
-  '/login',
-  '/register',
-  '/reset-password',
-  '/debug-login',
-  '/debug-reset',
-  '/api/health'
-]
-
-const PROTECTED_PATHS = [
-  '/dashboard',
-  '/expenses',
-  '/analytics',
-  '/settings'
-]
-
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
-  const response = NextResponse.next()
+export function middleware(_request: NextRequest) {
+  const response = NextResponse.next();
 
   // Add security headers
-  response.headers.set('X-DNS-Prefetch-Control', 'on')
-  response.headers.set('X-XSS-Protection', '1; mode=block')
-  response.headers.set('X-Frame-Options', 'DENY')
-  response.headers.set('X-Content-Type-Options', 'nosniff')
-  response.headers.set('Referrer-Policy', 'origin-when-cross-origin')
-  
+  response.headers.set("X-DNS-Prefetch-Control", "on");
+  response.headers.set("X-XSS-Protection", "1; mode=block");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "origin-when-cross-origin");
+
   // Content Security Policy
   const csp = [
     "default-src 'self'",
@@ -41,44 +23,20 @@ export function middleware(request: NextRequest) {
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "upgrade-insecure-requests"
-  ].join('; ')
-  
-  response.headers.set('Content-Security-Policy', csp)
+    "upgrade-insecure-requests",
+  ].join("; ");
+
+  response.headers.set("Content-Security-Policy", csp);
 
   // Add nonce for scripts if needed
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
-  response.headers.set('x-nonce', nonce)
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  response.headers.set("x-nonce", nonce);
 
-  // Temporarily disable auth checks to debug login issue
-  // TODO: Re-enable after fixing login flow
-  
-  // Authentication check for protected routes
-  // const isProtectedRoute = PROTECTED_PATHS.some(path => pathname.startsWith(path))
-  // const isPublicRoute = PUBLIC_PATHS.includes(pathname) || pathname.startsWith('/api/')
+  // TODO: re-enable server-side auth via a Firebase session cookie
+  // (createSessionCookie on /api/session, then read and verify here).
+  // For now, client-side redirects in app/(app)/layout.tsx protect routes.
 
-  // if (isProtectedRoute) {
-  //   // Check if user has authentication token (this would need to be implemented with your auth system)
-  //   const authToken = request.cookies.get('auth-token')?.value
-  //   
-  //   if (!authToken) {
-  //     const loginUrl = new URL('/login', request.url)
-  //     loginUrl.searchParams.set('redirect', pathname)
-  //     return NextResponse.redirect(loginUrl)
-  //   }
-  // }
-
-  // Redirect authenticated users away from auth pages
-  // if (pathname.startsWith('/login') || pathname.startsWith('/register')) {
-  //   const authToken = request.cookies.get('auth-token')?.value
-  //   
-  //   if (authToken) {
-  //     const redirectTo = request.nextUrl.searchParams.get('redirect') || '/dashboard'
-  //     return NextResponse.redirect(new URL(redirectTo, request.url))
-  //   }
-  // }
-
-  return response
+  return response;
 }
 
 export const config = {
@@ -90,6 +48,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * - public (public files)
      */
-    '/((?!_next/static|_next/image|favicon.ico|public/).*)',
+    "/((?!_next/static|_next/image|favicon.ico|public/).*)",
   ],
-}
+};

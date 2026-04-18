@@ -9,16 +9,16 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ExpenseType } from "@/types/expense";
 import { AIService } from "@/lib/ai";
 import { SpendingInsight, SpendingAnomaly } from "@/types/ai";
-import { 
-  Brain, 
-  TrendingUp, 
-  AlertTriangle, 
-  Info, 
-  CheckCircle, 
+import {
+  Brain,
+  TrendingUp,
+  AlertTriangle,
+  Info,
+  CheckCircle,
   RefreshCw,
   Lightbulb,
   Target,
-  DollarSign
+  DollarSign,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -48,14 +48,14 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
 
       const [dashboardInsights, detectedAnomalies] = await Promise.all([
         aiService.getDashboardInsights(expenses),
-        aiService.checkForAnomalies(expenses)
+        aiService.checkForAnomalies(expenses),
       ]);
 
       setInsights(dashboardInsights);
       setAnomalies(detectedAnomalies);
     } catch (error) {
-      console.error('Failed to load AI insights:', error);
-      setError('Failed to generate AI insights. Please try again.');
+      console.error("Failed to load AI insights:", error);
+      setError("Failed to generate AI insights. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -72,11 +72,11 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
 
   const getInsightIcon = (type: string) => {
     switch (type) {
-      case 'warning':
+      case "warning":
         return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-      case 'success':
+      case "success":
         return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'trend':
+      case "trend":
         return <TrendingUp className="h-4 w-4 text-blue-500" />;
       default:
         return <Info className="h-4 w-4 text-blue-500" />;
@@ -85,21 +85,21 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'high':
-        return 'destructive';
-      case 'medium':
-        return 'secondary';
-      case 'low':
-        return 'outline';
+      case "high":
+        return "destructive";
+      case "medium":
+        return "secondary";
+      case "low":
+        return "outline";
       default:
-        return 'secondary';
+        return "secondary";
     }
   };
 
   const getHealthScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
+    if (score >= 80) return "text-green-600";
+    if (score >= 60) return "text-yellow-600";
+    return "text-red-600";
   };
 
   if (!aiEnabled) {
@@ -107,18 +107,17 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
       <Card className={className}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5 text-muted-foreground" />
+            <Brain className="text-muted-foreground h-5 w-5" />
             AI Insights
           </CardTitle>
-          <CardDescription>
-            Powered by Gemini AI
-          </CardDescription>
+          <CardDescription>Powered by Gemini AI</CardDescription>
         </CardHeader>
         <CardContent>
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
-              AI insights are not available. Please configure your Gemini API key to enable intelligent spending analysis.
+              AI insights are not available. Please configure your Gemini API key to enable
+              intelligent spending analysis.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -154,26 +153,19 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
                 animate={{ rotate: loading ? 360 : 0 }}
                 transition={{ duration: 1, repeat: loading ? Infinity : 0, ease: "linear" }}
               >
-                <Brain className="h-5 w-5 text-primary" />
+                <Brain className="text-primary h-5 w-5" />
               </motion.div>
               AI Insights
             </CardTitle>
-            <CardDescription>
-              Intelligent analysis powered by Gemini AI
-            </CardDescription>
+            <CardDescription>Intelligent analysis powered by Gemini AI</CardDescription>
           </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={loadAIInsights}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="outline" size="sm" onClick={loadAIInsights} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </div>
       </CardHeader>
-      
+
       <CardContent className="space-y-6">
         {error && (
           <Alert variant="destructive">
@@ -184,15 +176,15 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
 
         {/* Quick Insight */}
         <div className="space-y-2">
-          <h4 className="text-sm font-medium flex items-center gap-2">
+          <h4 className="flex items-center gap-2 text-sm font-medium">
             <Lightbulb className="h-4 w-4 text-yellow-500" />
             Quick Insight
           </h4>
           {loading ? (
             <Skeleton className="h-4 w-full" />
           ) : insights?.quickInsight ? (
-            <motion.p 
-              className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg"
+            <motion.p
+              className="text-muted-foreground bg-muted/50 rounded-lg p-3 text-sm"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
@@ -205,12 +197,12 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
         {/* Financial Health Score */}
         {insights?.healthScore && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium flex items-center gap-2">
+            <h4 className="flex items-center gap-2 text-sm font-medium">
               <Target className="h-4 w-4 text-blue-500" />
               Financial Health Score
             </h4>
             <div className="flex items-center gap-3">
-              <motion.div 
+              <motion.div
                 className={`text-2xl font-bold ${getHealthScoreColor(insights.healthScore)}`}
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -219,8 +211,8 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
                 {insights.healthScore}/100
               </motion.div>
               <div className="flex-1">
-                <div className="w-full bg-secondary rounded-full h-2">
-                  <motion.div 
+                <div className="bg-secondary h-2 w-full rounded-full">
+                  <motion.div
                     className="bg-primary h-2 rounded-full"
                     initial={{ width: 0 }}
                     animate={{ width: `${insights.healthScore}%` }}
@@ -237,7 +229,7 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
           <h4 className="text-sm font-medium">Key Insights</h4>
           {loading ? (
             <div className="space-y-2">
-              {[1, 2, 3].map(i => (
+              {[1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
@@ -250,22 +242,31 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="border rounded-lg p-3 space-y-2 hover:bg-muted/50 transition-colors"
+                    className="hover:bg-muted/50 space-y-2 rounded-lg border p-3 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 flex-1">
+                      <div className="flex flex-1 items-start gap-2">
                         {getInsightIcon(insight.type)}
-                        <div className="space-y-1 flex-1">
+                        <div className="flex-1 space-y-1">
                           <p className="text-sm font-medium">{insight.title}</p>
-                          <p className="text-xs text-muted-foreground">{insight.description}</p>
+                          <p className="text-muted-foreground text-xs">{insight.description}</p>
                         </div>
                       </div>
-                      <Badge variant={getSeverityColor(insight.severity) as "default" | "secondary" | "destructive" | "outline"} className="text-xs">
+                      <Badge
+                        variant={
+                          getSeverityColor(insight.severity) as
+                            | "default"
+                            | "secondary"
+                            | "destructive"
+                            | "outline"
+                        }
+                        className="text-xs"
+                      >
                         {insight.severity}
                       </Badge>
                     </div>
                     {insight.actionable && insight.action && (
-                      <div className="text-xs text-primary bg-primary/10 p-2 rounded">
+                      <div className="text-primary bg-primary/10 rounded p-2 text-xs">
                         💡 {insight.action}
                       </div>
                     )}
@@ -274,14 +275,14 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
               </div>
             </AnimatePresence>
           ) : (
-            <p className="text-sm text-muted-foreground">No specific insights available.</p>
+            <p className="text-muted-foreground text-sm">No specific insights available.</p>
           )}
         </div>
 
         {/* Anomalies */}
         {anomalies.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium flex items-center gap-2">
+            <h4 className="flex items-center gap-2 text-sm font-medium">
               <AlertTriangle className="h-4 w-4 text-yellow-500" />
               Spending Anomalies
             </h4>
@@ -292,11 +293,20 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="border border-yellow-200 rounded-lg p-3 bg-yellow-50/50 dark:bg-yellow-900/10"
+                  className="rounded-lg border border-yellow-200 bg-yellow-50/50 p-3 dark:bg-yellow-900/10"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm">{anomaly.description}</p>
-                    <Badge variant={getSeverityColor(anomaly.severity) as "default" | "secondary" | "destructive" | "outline"} className="text-xs">
+                    <Badge
+                      variant={
+                        getSeverityColor(anomaly.severity) as
+                          | "default"
+                          | "secondary"
+                          | "destructive"
+                          | "outline"
+                      }
+                      className="text-xs"
+                    >
                       {anomaly.severity}
                     </Badge>
                   </div>
@@ -309,7 +319,7 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
         {/* Recommendations */}
         {insights?.recommendations?.length ? (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium flex items-center gap-2">
+            <h4 className="flex items-center gap-2 text-sm font-medium">
               <DollarSign className="h-4 w-4 text-green-500" />
               Recommendations
             </h4>
@@ -320,7 +330,7 @@ export function AIInsights({ expenses, className }: AIInsightsProps) {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="text-sm bg-green-50/50 dark:bg-green-900/10 border border-green-200 rounded-lg p-3"
+                  className="rounded-lg border border-green-200 bg-green-50/50 p-3 text-sm dark:bg-green-900/10"
                 >
                   💡 {recommendation}
                 </motion.div>

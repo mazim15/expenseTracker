@@ -1,42 +1,41 @@
-'use client'
+"use client";
 
-import { useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 
 export default function Error({
   error,
   reset,
 }: {
-  error: Error & { digest?: string }
-  reset: () => void
+  error: Error & { digest?: string };
+  reset: () => void;
 }) {
   useEffect(() => {
-    console.error('Application error:', error)
-  }, [error])
+    console.error("Application error:", error);
+  }, [error]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-            <AlertTriangle className="h-6 w-6 text-destructive" />
+          <div className="bg-destructive/10 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
+            <AlertTriangle className="text-destructive h-6 w-6" />
           </div>
           <CardTitle>Something went wrong!</CardTitle>
           <CardDescription>
-            An unexpected error occurred. Please try again or contact support if the problem persists.
+            An unexpected error occurred. Please try again or contact support if the problem
+            persists.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {process.env.NODE_ENV === 'development' && (
+          {process.env.NODE_ENV === "development" && (
             <details className="rounded border p-3 text-sm">
               <summary className="cursor-pointer font-medium">Error Details</summary>
-              <pre className="mt-2 whitespace-pre-wrap text-xs">{error.message}</pre>
+              <pre className="mt-2 text-xs whitespace-pre-wrap">{error.message}</pre>
               {error.digest && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Error ID: {error.digest}
-                </p>
+                <p className="text-muted-foreground mt-1 text-xs">Error ID: {error.digest}</p>
               )}
             </details>
           )}
@@ -45,9 +44,9 @@ export default function Error({
               <RefreshCw className="mr-2 h-4 w-4" />
               Try again
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => window.location.href = '/'}
+            <Button
+              variant="outline"
+              onClick={() => (window.location.href = "/")}
               className="flex-1"
             >
               Go home
@@ -56,5 +55,5 @@ export default function Error({
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

@@ -6,7 +6,14 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle } from "lucide-react";
 
@@ -19,7 +26,7 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       setError("");
       setMessage("");
@@ -35,13 +42,11 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-16 flex justify-center">
+    <div className="container mx-auto flex justify-center px-4 py-16">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl">Reset Password</CardTitle>
-          <CardDescription>
-            Enter your email to receive a password reset link
-          </CardDescription>
+          <CardDescription>Enter your email to receive a password reset link</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
@@ -52,7 +57,7 @@ export default function ResetPassword() {
               </Alert>
             )}
             {message && (
-              <Alert variant="success" className="bg-green-50 text-green-800 border-green-200">
+              <Alert variant="success" className="border-green-200 bg-green-50 text-green-800">
                 <CheckCircle className="h-4 w-4" />
                 <AlertDescription>{message}</AlertDescription>
               </Alert>
@@ -73,7 +78,7 @@ export default function ResetPassword() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Sending..." : "Reset Password"}
             </Button>
-            <p className="text-sm text-center text-muted-foreground">
+            <p className="text-muted-foreground text-center text-sm">
               <Link href="/login" className="text-primary hover:underline">
                 Back to login
               </Link>
@@ -83,4 +88,4 @@ export default function ResetPassword() {
       </Card>
     </div>
   );
-} 
+}

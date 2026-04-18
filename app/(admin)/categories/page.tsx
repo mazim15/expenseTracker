@@ -21,7 +21,7 @@ export default function CategoriesPage() {
   };
 
   const handleRemoveCategory = (value: string) => {
-    setCategories(categories.filter(cat => cat.value !== value));
+    setCategories(categories.filter((cat) => cat.value !== value));
   };
 
   const handleSaveChanges = () => {
@@ -33,15 +33,15 @@ export default function CategoriesPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto max-w-4xl px-4 py-8">
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex items-center justify-between">
             <div>
               <CardTitle>Expense Categories</CardTitle>
               <CardDescription>Manage your expense categories</CardDescription>
             </div>
-            <Button 
+            <Button
               variant={editMode ? "outline" : "default"}
               onClick={() => setEditMode(!editMode)}
             >
@@ -56,20 +56,22 @@ export default function CategoriesPage() {
                 <Input
                   placeholder="Category Name"
                   value={newCategory.label}
-                  onChange={(e) => setNewCategory({
-                    ...newCategory,
-                    label: e.target.value,
-                    value: e.target.value.toLowerCase().replace(/\s+/g, '-')
-                  })}
+                  onChange={(e) =>
+                    setNewCategory({
+                      ...newCategory,
+                      label: e.target.value,
+                      value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
+                    })
+                  }
                 />
                 <Button onClick={handleAddCategory}>
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className="mr-2 h-4 w-4" />
                   Add Category
                 </Button>
               </div>
               <div className="flex justify-end">
                 <Button onClick={handleSaveChanges} variant="default">
-                  <Save className="h-4 w-4 mr-2" />
+                  <Save className="mr-2 h-4 w-4" />
                   Save Changes
                 </Button>
               </div>
@@ -80,17 +82,13 @@ export default function CategoriesPage() {
             {categories.map((category) => (
               <div
                 key={category.value}
-                className="flex items-center justify-between p-2 rounded-lg border"
+                className="flex items-center justify-between rounded-lg border p-2"
               >
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">
-                    {category.label}
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    ({category.value})
-                  </span>
+                  <Badge variant="secondary">{category.label}</Badge>
+                  <span className="text-muted-foreground text-sm">({category.value})</span>
                 </div>
-                {editMode && !['food', 'housing', 'utilities'].includes(category.value) && (
+                {editMode && !["food", "housing", "utilities"].includes(category.value) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -106,4 +104,4 @@ export default function CategoriesPage() {
       </Card>
     </div>
   );
-} 
+}

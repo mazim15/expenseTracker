@@ -11,30 +11,30 @@ import {
   deleteDoc,
   doc,
   Timestamp,
-  getCountFromServer
-} from 'firebase/firestore';
-import { db } from '../firebase';
-import { LogEntry, LogFilter, LogStorageAdapter } from './types';
+  getCountFromServer,
+} from "firebase/firestore";
+import { db } from "../firebase";
+import { LogEntry, LogFilter, LogStorageAdapter } from "./types";
 
 export class FirestoreLogAdapter implements LogStorageAdapter {
-  private collectionName = 'logs';
+  private collectionName = "logs";
 
   private logEntryToFirestore(entry: LogEntry) {
     // Ensure userId is never undefined for Firestore
     const firestoreEntry = {
       ...entry,
       timestamp: Timestamp.fromDate(entry.timestamp),
-      userId: entry.userId || 'anonymous' // Fallback for undefined userId
+      userId: entry.userId || "anonymous", // Fallback for undefined userId
     };
-    
+
     // Recursively remove undefined values from the entire object
     const removeUndefined = (obj: any): any => {
       if (obj === null || obj === undefined) return null;
-      if (typeof obj !== 'object') return obj;
+      if (typeof obj !== "object") return obj;
       if (Array.isArray(obj)) return obj.map(removeUndefined);
-      
+
       const cleaned: any = {};
-      Object.keys(obj).forEach(key => {
+      Object.keys(obj).forEach((key) => {
         const value = obj[key];
         if (value !== undefined) {
           cleaned[key] = removeUndefined(value);
@@ -42,13 +42,13 @@ export class FirestoreLogAdapter implements LogStorageAdapter {
       });
       return cleaned;
     };
-    
+
     return removeUndefined(firestoreEntry);
   }
 
   private firestoreToLogEntry(doc: any): LogEntry {
     const data = doc.data();
-    
+
     // Handle timestamp conversion with fallbacks
     let timestamp: Date;
     try {
@@ -65,20 +65,20 @@ export class FirestoreLogAdapter implements LogStorageAdapter {
         // Fallback to current date
         timestamp = new Date();
       }
-      
+
       // Validate the date
       if (isNaN(timestamp.getTime())) {
         timestamp = new Date();
       }
     } catch (error) {
-      console.warn('Error parsing timestamp:', data.timestamp, error);
+      console.warn("Error parsing timestamp:", data.timestamp, error);
       timestamp = new Date();
     }
-    
+
     return {
       ...data,
       id: doc.id,
-      timestamp
+      timestamp,
     };
   }
 
@@ -88,7 +88,7 @@ export class FirestoreLogAdapter implements LogStorageAdapter {
       const firestoreEntry = this.logEntryToFirestore(entry);
       await addDoc(logsCollection, firestoreEntry);
     } catch (error) {
-      console.error('Failed to write log to Firestore:', error);
+      console.error("Failed to write log to Firestore:", error);
       throw error;
     }
   }
@@ -96,24 +96,24 @@ export class FirestoreLogAdapter implements LogStorageAdapter {
   async read(filter?: LogFilter, limit = 100, offset = 0): Promise<LogEntry[]> {
     try {
       const logsCollection = collection(db, this.collectionName);
-      let q = query(logsCollection, orderBy('timestamp', 'desc'));
+      let q = query(logsCollection, orderBy("timestamp", "desc"));
 
       // Apply filters
       if (filter) {
         if (filter.level && filter.level.length > 0) {
-          q = query(q, where('level', 'in', filter.level));
+          q = query(q, where("level", "in", filter.level));
         }
         if (filter.category && filter.category.length > 0) {
-          q = query(q, where('category', 'in', filter.category));
+          q = query(q, where("category", "in", filter.category));
         }
         if (filter.userId) {
-          q = query(q, where('userId', '==', filter.userId));
+          q = query(q, where("userId", "==", filter.userId));
         }
         if (filter.startDate) {
-          q = query(q, where('timestamp', '>=', Timestamp.fromDate(filter.startDate)));
+          q = query(q, where("timestamp", ">=", Timestamp.fromDate(filter.startDate)));
         }
         if (filter.endDate) {
-          q = query(q, where('timestamp', '<=', Timestamp.fromDate(filter.endDate)));
+          q = query(q, where("timestamp", "<=", Timestamp.fromDate(filter.endDate)));
         }
       }
 
@@ -121,20 +121,21 @@ export class FirestoreLogAdapter implements LogStorageAdapter {
       q = query(q, firestoreLimit(limit));
 
       const snapshot = await getDocs(q);
-      const logs = snapshot.docs.map(doc => this.firestoreToLogEntry(doc));
+      const logs = snapshot.docs.map((doc) => this.firestoreToLogEntry(doc));
 
       // Apply text search on message and action (client-side since Firestore doesn't support full-text search)
       if (filter?.search) {
         const searchLower = filter.search.toLowerCase();
-        return logs.filter(log => 
-          log.message.toLowerCase().includes(searchLower) ||
-          log.action.toLowerCase().includes(searchLower)
+        return logs.filter(
+          (log) =>
+            log.message.toLowerCase().includes(searchLower) ||
+            log.action.toLowerCase().includes(searchLower),
         );
       }
 
       return logs;
     } catch (error) {
-      console.error('Failed to read logs from Firestore:', error);
+      console.error("Failed to read logs from Firestore:", error);
       throw error;
     }
   }
@@ -147,26 +148,26 @@ export class FirestoreLogAdapter implements LogStorageAdapter {
       // Apply filters (same as read method)
       if (filter) {
         if (filter.level && filter.level.length > 0) {
-          q = query(q, where('level', 'in', filter.level));
+          q = query(q, where("level", "in", filter.level));
         }
         if (filter.category && filter.category.length > 0) {
-          q = query(q, where('category', 'in', filter.category));
+          q = query(q, where("category", "in", filter.category));
         }
         if (filter.userId) {
-          q = query(q, where('userId', '==', filter.userId));
+          q = query(q, where("userId", "==", filter.userId));
         }
         if (filter.startDate) {
-          q = query(q, where('timestamp', '>=', Timestamp.fromDate(filter.startDate)));
+          q = query(q, where("timestamp", ">=", Timestamp.fromDate(filter.startDate)));
         }
         if (filter.endDate) {
-          q = query(q, where('timestamp', '<=', Timestamp.fromDate(filter.endDate)));
+          q = query(q, where("timestamp", "<=", Timestamp.fromDate(filter.endDate)));
         }
       }
 
       const snapshot = await getCountFromServer(q);
       return snapshot.data().count;
     } catch (error) {
-      console.error('Failed to count logs in Firestore:', error);
+      console.error("Failed to count logs in Firestore:", error);
       throw error;
     }
   }
@@ -176,7 +177,7 @@ export class FirestoreLogAdapter implements LogStorageAdapter {
       const logDoc = doc(db, this.collectionName, id);
       await deleteDoc(logDoc);
     } catch (error) {
-      console.error('Failed to delete log from Firestore:', error);
+      console.error("Failed to delete log from Firestore:", error);
       throw error;
     }
   }
@@ -185,12 +186,12 @@ export class FirestoreLogAdapter implements LogStorageAdapter {
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
-      
+
       const logsCollection = collection(db, this.collectionName);
       const q = query(
         logsCollection,
-        where('timestamp', '<', Timestamp.fromDate(cutoffDate)),
-        firestoreLimit(500) // Delete in batches
+        where("timestamp", "<", Timestamp.fromDate(cutoffDate)),
+        firestoreLimit(500), // Delete in batches
       );
 
       const snapshot = await getDocs(q);
@@ -203,7 +204,7 @@ export class FirestoreLogAdapter implements LogStorageAdapter {
 
       return deletedCount;
     } catch (error) {
-      console.error('Failed to cleanup logs in Firestore:', error);
+      console.error("Failed to cleanup logs in Firestore:", error);
       throw error;
     }
   }
@@ -215,7 +216,7 @@ export class ConsoleLogAdapter implements LogStorageAdapter {
 
   async write(entry: LogEntry): Promise<void> {
     this.logs.unshift(entry);
-    
+
     // Keep only the most recent logs
     if (this.logs.length > this.maxLogs) {
       this.logs = this.logs.slice(0, this.maxLogs);
@@ -227,25 +228,26 @@ export class ConsoleLogAdapter implements LogStorageAdapter {
 
     if (filter) {
       if (filter.level && filter.level.length > 0) {
-        filteredLogs = filteredLogs.filter(log => filter.level!.includes(log.level));
+        filteredLogs = filteredLogs.filter((log) => filter.level!.includes(log.level));
       }
       if (filter.category && filter.category.length > 0) {
-        filteredLogs = filteredLogs.filter(log => filter.category!.includes(log.category));
+        filteredLogs = filteredLogs.filter((log) => filter.category!.includes(log.category));
       }
       if (filter.userId) {
-        filteredLogs = filteredLogs.filter(log => log.userId === filter.userId);
+        filteredLogs = filteredLogs.filter((log) => log.userId === filter.userId);
       }
       if (filter.startDate) {
-        filteredLogs = filteredLogs.filter(log => log.timestamp >= filter.startDate!);
+        filteredLogs = filteredLogs.filter((log) => log.timestamp >= filter.startDate!);
       }
       if (filter.endDate) {
-        filteredLogs = filteredLogs.filter(log => log.timestamp <= filter.endDate!);
+        filteredLogs = filteredLogs.filter((log) => log.timestamp <= filter.endDate!);
       }
       if (filter.search) {
         const searchLower = filter.search.toLowerCase();
-        filteredLogs = filteredLogs.filter(log => 
-          log.message.toLowerCase().includes(searchLower) ||
-          log.action.toLowerCase().includes(searchLower)
+        filteredLogs = filteredLogs.filter(
+          (log) =>
+            log.message.toLowerCase().includes(searchLower) ||
+            log.action.toLowerCase().includes(searchLower),
         );
       }
     }
@@ -259,16 +261,16 @@ export class ConsoleLogAdapter implements LogStorageAdapter {
   }
 
   async delete(id: string): Promise<void> {
-    this.logs = this.logs.filter(log => log.id !== id);
+    this.logs = this.logs.filter((log) => log.id !== id);
   }
 
   async cleanup(retentionDays: number): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
-    
+
     const beforeCount = this.logs.length;
-    this.logs = this.logs.filter(log => log.timestamp >= cutoffDate);
-    
+    this.logs = this.logs.filter((log) => log.timestamp >= cutoffDate);
+
     return beforeCount - this.logs.length;
   }
 }

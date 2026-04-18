@@ -10,7 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AlertCircle, Check, Brain } from "lucide-react";
@@ -28,17 +34,17 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  
+
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
-  
+
   const aiService = AIService.getInstance();
   const isAIAvailable = aiService.isAIEnabled();
 
   // Debug logging
-  console.log('Settings:', settings);
-  console.log('AI Available:', isAIAvailable);
-  
+  console.log("Settings:", settings);
+  console.log("AI Available:", isAIAvailable);
+
   useEffect(() => {
     if (user) {
       const firebaseUser = user as User;
@@ -46,22 +52,22 @@ export default function SettingsPage() {
       setEmail(firebaseUser.email || "");
     }
   }, [user]);
-  
+
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    
+
     try {
       setLoading(true);
       setError("");
       setSuccess("");
-      
+
       const profileUpdate: UserProfileUpdate = {
-        displayName: displayName || null
+        displayName: displayName || null,
       };
-      
+
       await updateUser(profileUpdate);
-      
+
       setSuccess("Profile updated successfully");
       setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
@@ -71,15 +77,15 @@ export default function SettingsPage() {
       setLoading(false);
     }
   };
-  
+
   const handleSettingsUpdate = async () => {
     if (!user) return;
-    
+
     try {
       setLoading(true);
       setError("");
       setSuccess("");
-      
+
       setSuccess("Settings updated successfully");
       setTimeout(() => setSuccess(""), 3000);
     } catch (err: Error | unknown) {
@@ -89,7 +95,7 @@ export default function SettingsPage() {
       setLoading(false);
     }
   };
-  
+
   const userInitials = displayName
     ? displayName
         .split(" ")
@@ -97,17 +103,17 @@ export default function SettingsPage() {
         .join("")
         .toUpperCase()
     : "U";
-  
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl">
+    <div className="container mx-auto max-w-5xl px-4 py-8">
       <div className="flex flex-col space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-primary/10 to-transparent p-6 rounded-lg">
+        <div className="from-primary/10 flex flex-col items-start justify-between gap-4 rounded-lg bg-gradient-to-r to-transparent p-6 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
             <p className="text-muted-foreground">Manage your account and preferences</p>
           </div>
         </div>
-        
+
         <Tabs defaultValue="profile" className="space-y-4">
           <TabsList>
             <TabsTrigger value="profile">Profile</TabsTrigger>
@@ -115,14 +121,12 @@ export default function SettingsPage() {
             <TabsTrigger value="ai">AI Features</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="profile" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Profile Information</CardTitle>
-                <CardDescription>
-                  Update your personal information
-                </CardDescription>
+                <CardDescription>Update your personal information</CardDescription>
               </CardHeader>
               <CardContent>
                 {error && (
@@ -131,19 +135,19 @@ export default function SettingsPage() {
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
-                
+
                 {success && (
                   <Alert className="mb-4 border-green-500 text-green-700">
                     <Check className="h-4 w-4" />
                     <AlertDescription>{success}</AlertDescription>
                   </Alert>
                 )}
-                
+
                 <form onSubmit={handleProfileUpdate} className="space-y-4">
-                  <div className="flex flex-col md:flex-row gap-8 items-start">
+                  <div className="flex flex-col items-start gap-8 md:flex-row">
                     <div className="flex flex-col items-center space-y-2">
                       <Avatar className="h-24 w-24">
-                        <AvatarFallback className="text-2xl bg-primary/10 text-primary">
+                        <AvatarFallback className="bg-primary/10 text-primary text-2xl">
                           {userInitials}
                         </AvatarFallback>
                       </Avatar>
@@ -151,7 +155,7 @@ export default function SettingsPage() {
                         Change Avatar
                       </Button>
                     </div>
-                    
+
                     <div className="flex-1 space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="displayName">Display Name</Label>
@@ -161,22 +165,17 @@ export default function SettingsPage() {
                           onChange={(e) => setDisplayName(e.target.value)}
                         />
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          value={email}
-                          disabled
-                          className="bg-muted"
-                        />
-                        <p className="text-sm text-muted-foreground">
+                        <Input id="email" value={email} disabled className="bg-muted" />
+                        <p className="text-muted-foreground text-sm">
                           Your email cannot be changed
                         </p>
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-end">
                     <Button type="submit" disabled={loading}>
                       {loading ? "Saving..." : "Save Changes"}
@@ -186,14 +185,12 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="preferences" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Preferences</CardTitle>
-                <CardDescription>
-                  Customize your experience
-                </CardDescription>
+                <CardDescription>Customize your experience</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {success && (
@@ -202,10 +199,13 @@ export default function SettingsPage() {
                     <AlertDescription>{success}</AlertDescription>
                   </Alert>
                 )}
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="currency">Currency</Label>
-                  <Select value={settings.currency} onValueChange={(value) => updateSettings({ currency: value })}>
+                  <Select
+                    value={settings.currency}
+                    onValueChange={(value) => updateSettings({ currency: value })}
+                  >
                     <SelectTrigger id="currency">
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
@@ -219,13 +219,13 @@ export default function SettingsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 <Separator />
-                
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="notifications">Notifications</Label>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Receive notifications about your expenses and budgets
                     </p>
                   </div>
@@ -235,13 +235,13 @@ export default function SettingsPage() {
                     onCheckedChange={(checked) => updateSettings({ notifications: checked })}
                   />
                 </div>
-                
+
                 <Separator />
-                
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="darkMode">Dark Mode</Label>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                       Use dark theme for the application
                     </p>
                   </div>
@@ -251,7 +251,7 @@ export default function SettingsPage() {
                     onCheckedChange={(checked) => updateSettings({ darkMode: checked })}
                   />
                 </div>
-                
+
                 <div className="flex justify-end">
                   <Button onClick={handleSettingsUpdate} disabled={loading}>
                     {loading ? "Saving..." : "Save Preferences"}
@@ -260,12 +260,12 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="ai" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Brain className="h-5 w-5 text-primary" />
+                  <Brain className="text-primary h-5 w-5" />
                   AI Features
                 </CardTitle>
                 <CardDescription>
@@ -277,61 +277,67 @@ export default function SettingsPage() {
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      AI features are not available. Please configure your Gemini API key to enable intelligent expense analysis.
+                      AI features are not available. Please configure your Gemini API key to enable
+                      intelligent expense analysis.
                     </AlertDescription>
                   </Alert>
                 )}
-                
+
                 {success && (
                   <Alert className="mb-4 border-green-500 text-green-700">
                     <Check className="h-4 w-4" />
                     <AlertDescription>{success}</AlertDescription>
                   </Alert>
                 )}
-                
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="autoCategorizationEnabled">Smart Auto-Categorization</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Automatically suggest categories for new expenses based on description and your spending history
+                    <p className="text-muted-foreground text-sm">
+                      Automatically suggest categories for new expenses based on description and
+                      your spending history
                     </p>
                   </div>
                   <Switch
                     id="autoCategorizationEnabled"
                     checked={settings.autoCategorizationEnabled}
-                    onCheckedChange={(checked) => updateSettings({ autoCategorizationEnabled: checked })}
+                    onCheckedChange={(checked) =>
+                      updateSettings({ autoCategorizationEnabled: checked })
+                    }
                     disabled={!isAIAvailable}
                   />
                 </div>
-                
+
                 <Separator />
-                
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="aiInsightsEnabled">AI Insights</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Generate intelligent spending insights, anomaly detection, and personalized recommendations
+                    <p className="text-muted-foreground text-sm">
+                      Generate intelligent spending insights, anomaly detection, and personalized
+                      recommendations
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      Current: {settings.aiInsightsEnabled ? 'ON' : 'OFF'} | API Available: {isAIAvailable ? 'YES' : 'NO'}
+                    <p className="text-muted-foreground text-xs">
+                      Current: {settings.aiInsightsEnabled ? "ON" : "OFF"} | API Available:{" "}
+                      {isAIAvailable ? "YES" : "NO"}
                     </p>
                   </div>
                   <Switch
                     id="aiInsightsEnabled"
                     checked={settings.aiInsightsEnabled}
                     onCheckedChange={(checked) => {
-                      console.log('Toggle clicked:', checked);
+                      console.log("Toggle clicked:", checked);
                       updateSettings({ aiInsightsEnabled: checked });
                     }}
                     disabled={!isAIAvailable}
                   />
                 </div>
-                
+
                 <Separator />
-                
-                <div className="rounded-lg border p-4 bg-muted/30">
-                  <h4 className="text-sm font-medium mb-2">Available AI Features:</h4>
-                  <ul className="text-sm text-muted-foreground space-y-1">
+
+                <div className="bg-muted/30 rounded-lg border p-4">
+                  <h4 className="mb-2 text-sm font-medium">Available AI Features:</h4>
+                  <ul className="text-muted-foreground space-y-1 text-sm">
                     <li>• Smart expense categorization with learning from your habits</li>
                     <li>• Spending pattern analysis and trend detection</li>
                     <li>• Anomaly detection for unusual transactions</li>
@@ -341,7 +347,7 @@ export default function SettingsPage() {
                     <li>• Savings opportunity identification</li>
                   </ul>
                 </div>
-                
+
                 <div className="flex justify-end">
                   <Button onClick={handleSettingsUpdate} disabled={loading || !isAIAvailable}>
                     {loading ? "Saving..." : "Save AI Settings"}
@@ -350,31 +356,29 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="security" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Security</CardTitle>
-                <CardDescription>
-                  Manage your account security
-                </CardDescription>
+                <CardDescription>Manage your account security</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="currentPassword">Current Password</Label>
                   <Input id="currentPassword" type="password" />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="newPassword">New Password</Label>
                   <Input id="newPassword" type="password" />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm New Password</Label>
                   <Input id="confirmPassword" type="password" />
                 </div>
-                
+
                 <div className="flex justify-end">
                   <Button>Change Password</Button>
                 </div>
@@ -385,4 +389,4 @@ export default function SettingsPage() {
       </div>
     </div>
   );
-} 
+}

@@ -1,19 +1,19 @@
 export interface SpendingPattern {
   category: string;
   averageAmount: number;
-  frequency: 'daily' | 'weekly' | 'monthly' | 'occasional';
-  trend: 'increasing' | 'decreasing' | 'stable';
+  frequency: "daily" | "weekly" | "monthly" | "occasional";
+  trend: "increasing" | "decreasing" | "stable";
   confidence: number;
 }
 
 export interface SpendingInsight {
   id: string;
-  type: 'warning' | 'info' | 'success' | 'trend';
+  type: "warning" | "info" | "success" | "trend";
   title: string;
   description: string;
   actionable: boolean;
   action?: string;
-  severity: 'low' | 'medium' | 'high';
+  severity: "low" | "medium" | "high";
   category?: string;
   amount?: number;
   createdAt: Date;
@@ -36,9 +36,9 @@ export interface BudgetRecommendation {
 export interface SpendingAnomaly {
   id: string;
   expenseId?: string;
-  type: 'unusual_amount' | 'unusual_frequency' | 'unusual_category' | 'duplicate_transaction';
+  type: "unusual_amount" | "unusual_frequency" | "unusual_category" | "duplicate_transaction";
   description: string;
-  severity: 'low' | 'medium' | 'high';
+  severity: "low" | "medium" | "high";
   detectedAt: Date;
   confidence: number;
 }
@@ -60,7 +60,7 @@ export interface PredictiveAnalysis {
   }[];
   budgetRisk: {
     category: string;
-    riskLevel: 'low' | 'medium' | 'high';
+    riskLevel: "low" | "medium" | "high";
     daysUntilOverrun?: number;
   }[];
   savingsOpportunities: {

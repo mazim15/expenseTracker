@@ -1,17 +1,17 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileQuestion, Home, ArrowLeft } from 'lucide-react'
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileQuestion, Home, ArrowLeft } from "lucide-react";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <FileQuestion className="h-6 w-6 text-muted-foreground" />
+          <div className="bg-muted mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
+            <FileQuestion className="text-muted-foreground h-6 w-6" />
           </div>
           <CardTitle>Page Not Found</CardTitle>
           <CardDescription>
@@ -34,5 +34,5 @@ export default function NotFound() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

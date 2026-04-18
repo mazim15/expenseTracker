@@ -2,10 +2,22 @@
 
 import { useState, useEffect } from "react";
 import { ExpenseType, ExpenseCategory, EXPENSE_CATEGORIES } from "@/types/expense";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/utils";
 import { Trash2, Plus } from "lucide-react";
@@ -23,11 +35,11 @@ export default function ReceiptReviewDialog({
   onOpenChange,
   expenses: initialExpenses,
   onSave,
-  onCancel
+  onCancel,
 }: ReceiptReviewDialogProps) {
   const [expenses, setExpenses] = useState<Partial<ExpenseType>[]>(initialExpenses);
   const [selectedItems, setSelectedItems] = useState<Record<number, boolean>>(
-    initialExpenses.reduce((acc, _, index) => ({ ...acc, [index]: true }), {})
+    initialExpenses.reduce((acc, _, index) => ({ ...acc, [index]: true }), {}),
   );
 
   // Calculate total amount for selected expenses
@@ -36,21 +48,21 @@ export default function ReceiptReviewDialog({
     .reduce((sum, expense) => sum + (expense.amount || 0), 0);
 
   const handleToggleItem = (index: number) => {
-    setSelectedItems(prev => ({ ...prev, [index]: !prev[index] }));
+    setSelectedItems((prev) => ({ ...prev, [index]: !prev[index] }));
   };
 
   const handleUpdateExpense = (index: number, field: keyof ExpenseType, value: unknown) => {
-    setExpenses(prev => prev.map((expense, i) => 
-      i === index ? { ...expense, [field]: value } : expense
-    ));
+    setExpenses((prev) =>
+      prev.map((expense, i) => (i === index ? { ...expense, [field]: value } : expense)),
+    );
   };
 
   const handleRemoveExpense = (index: number) => {
-    setExpenses(prev => prev.filter((_, i) => i !== index));
-    setSelectedItems(prev => {
+    setExpenses((prev) => prev.filter((_, i) => i !== index));
+    setSelectedItems((prev) => {
       const newSelected = { ...prev };
       delete newSelected[index];
-      
+
       // Re-index the remaining items
       return Object.keys(newSelected).reduce((acc, key) => {
         const oldIndex = parseInt(key);
@@ -70,9 +82,7 @@ export default function ReceiptReviewDialog({
     if (initialExpenses.length > 0) {
       setExpenses(initialExpenses);
       // Also reset the selected items when expenses change
-      setSelectedItems(
-        initialExpenses.reduce((acc, _, index) => ({ ...acc, [index]: true }), {})
-      );
+      setSelectedItems(initialExpenses.reduce((acc, _, index) => ({ ...acc, [index]: true }), {}));
     }
   }, [initialExpenses]);
 
@@ -84,26 +94,25 @@ export default function ReceiptReviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">
-            Review Receipt Items
-          </DialogTitle>
+          <DialogTitle className="text-xl font-bold">Review Receipt Items</DialogTitle>
         </DialogHeader>
 
         <div className="py-4">
-          <p className="text-sm text-muted-foreground mb-4">
-            Review the items detected from your receipt. Select the items you want to add as expenses.
+          <p className="text-muted-foreground mb-4 text-sm">
+            Review the items detected from your receipt. Select the items you want to add as
+            expenses.
           </p>
 
           <div className="space-y-4">
             {expenses.length === 0 ? (
-              <div className="text-center py-6 text-muted-foreground">
+              <div className="text-muted-foreground py-6 text-center">
                 No items detected from the receipt.
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-12 gap-2 font-medium text-sm border-b pb-2">
+                <div className="grid grid-cols-12 gap-2 border-b pb-2 text-sm font-medium">
                   <div className="col-span-1"></div>
                   <div className="col-span-5">Description</div>
                   <div className="col-span-2">Amount</div>
@@ -112,11 +121,11 @@ export default function ReceiptReviewDialog({
                 </div>
 
                 {expenses.map((expense, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                  <div key={index} className="grid grid-cols-12 items-center gap-2">
                     <div className="col-span-1">
-                      <Checkbox 
+                      <Checkbox
                         id={`item-${index}`}
-                        checked={selectedItems[index]} 
+                        checked={selectedItems[index]}
                         onChange={() => handleToggleItem(index)}
                       />
                     </div>
@@ -132,14 +141,18 @@ export default function ReceiptReviewDialog({
                         type="number"
                         step="0.01"
                         value={expense.amount || ""}
-                        onChange={(e) => handleUpdateExpense(index, "amount", parseFloat(e.target.value))}
+                        onChange={(e) =>
+                          handleUpdateExpense(index, "amount", parseFloat(e.target.value))
+                        }
                         className={!selectedItems[index] ? "opacity-50" : ""}
                       />
                     </div>
                     <div className="col-span-3">
-                      <Select 
-                        value={expense.category as string || "other"} 
-                        onValueChange={(value) => handleUpdateExpense(index, "category", value as ExpenseCategory)}
+                      <Select
+                        value={(expense.category as string) || "other"}
+                        onValueChange={(value) =>
+                          handleUpdateExpense(index, "category", value as ExpenseCategory)
+                        }
                       >
                         <SelectTrigger className={!selectedItems[index] ? "opacity-50" : ""}>
                           <SelectValue />
@@ -165,21 +178,24 @@ export default function ReceiptReviewDialog({
                   </div>
                 ))}
 
-                <div className="flex justify-between items-center border-t pt-4 mt-4">
-                  <p className="font-medium">
-                    Total Selected: {formatCurrency(totalAmount)}
-                  </p>
+                <div className="mt-4 flex items-center justify-between border-t pt-4">
+                  <p className="font-medium">Total Selected: {formatCurrency(totalAmount)}</p>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setExpenses([...expenses, { 
-                      description: "",
-                      amount: 0,
-                      category: "other",
-                      date: new Date()
-                    }])}
+                    onClick={() =>
+                      setExpenses([
+                        ...expenses,
+                        {
+                          description: "",
+                          amount: 0,
+                          category: "other",
+                          date: new Date(),
+                        },
+                      ])
+                    }
                   >
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="mr-2 h-4 w-4" />
                     Add Item
                   </Button>
                 </div>
@@ -192,14 +208,15 @@ export default function ReceiptReviewDialog({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button 
+          <Button
             onClick={handleSave}
-            disabled={expenses.length === 0 || Object.values(selectedItems).every(v => !v)}
+            disabled={expenses.length === 0 || Object.values(selectedItems).every((v) => !v)}
           >
-            Add {Object.values(selectedItems).filter(Boolean).length} Expense{Object.values(selectedItems).filter(Boolean).length !== 1 ? 's' : ''}
+            Add {Object.values(selectedItems).filter(Boolean).length} Expense
+            {Object.values(selectedItems).filter(Boolean).length !== 1 ? "s" : ""}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-} 
+}

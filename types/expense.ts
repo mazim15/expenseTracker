@@ -1,6 +1,4 @@
-import { getStoredCategories } from "@/lib/utils/categoryStorage";
-
-export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]['value'];
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]["value"];
 
 export interface ExpenseType {
   id: string;
@@ -31,14 +29,16 @@ const DEFAULT_CATEGORIES: ExpenseCategoryType[] = [
   { value: "shopping", label: "Shopping" },
   { value: "education", label: "Education" },
   { value: "personal", label: "Personal" },
-  { value: "other", label: "Other" }
+  { value: "other", label: "Other" },
 ];
 
 // Export default categories for components to use
 export const EXPENSE_CATEGORIES: ExpenseCategoryType[] = DEFAULT_CATEGORIES;
 
 // Legacy function for backward compatibility - now just returns defaults
-export function updateExpenseCategories(newCategories: ExpenseCategoryType[]) {
+export function updateExpenseCategories(_newCategories: ExpenseCategoryType[]) {
   // This function is deprecated - use database-based category management instead
-  console.warn("updateExpenseCategories is deprecated. Use saveUserCategories from @/lib/categories instead");
-} 
+  console.warn(
+    "updateExpenseCategories is deprecated. Use saveUserCategories from @/lib/categories instead",
+  );
+}

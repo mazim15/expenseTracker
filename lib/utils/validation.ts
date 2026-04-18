@@ -1,8 +1,8 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export function validateServerInput<T>(
   schema: z.ZodSchema<T>,
-  data: unknown
+  data: unknown,
 ): { success: true; data: T } | { success: false; errors: string[] } {
   try {
     const validated = schema.parse(data);
@@ -12,14 +12,14 @@ export function validateServerInput<T>(
       const errors = error.errors.map((err) => err.message);
       return { success: false, errors };
     }
-    return { success: false, errors: ['Validation failed'] };
+    return { success: false, errors: ["Validation failed"] };
   }
 }
 
 export function sanitizeInput(input: string): string {
   return input
     .trim()
-    .replace(/[<>]/g, '') // Remove potential HTML tags
+    .replace(/[<>]/g, "") // Remove potential HTML tags
     .slice(0, 1000); // Limit length
 }
 
