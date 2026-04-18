@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # NEXT_PUBLIC_* values are inlined into the client bundle by design.
+  # Firebase web API keys are safe to expose (security enforced by Firebase rules).
+  # TODO: move NEXT_PUBLIC_GEMINI_API_KEY server-side (API route) so it is not shipped to the browser.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_FIREBASE_API_KEY,NEXT_PUBLIC_FIREBASE_APP_ID,NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,NEXT_PUBLIC_FIREBASE_PROJECT_ID,NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,NEXT_PUBLIC_GEMINI_API_KEY"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
