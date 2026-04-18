@@ -37,7 +37,6 @@ const mainNav: NavItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Expenses", href: "/expenses", icon: Receipt },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
-  { name: "Activity", href: "/activity", icon: Activity },
 ];
 
 const adminNav: NavItem[] = [

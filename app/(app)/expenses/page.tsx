@@ -50,7 +50,8 @@ import DeleteConfirmDialog from "@/components/expenses/DeleteConfirmDialog";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import ReceiptReviewDialog from "@/components/expenses/ReceiptReviewDialog";
-import { fileToBase64, analyzeReceipt } from "@/lib/utils/receiptAnalysis";
+import ScanReceiptDialog, { type ScanReceiptResult } from "@/components/expenses/ScanReceiptDialog";
+import { analyzeReceipt } from "@/lib/utils/receiptAnalysis";
 import { getUserCategories } from "@/lib/categories";
 import { useLogger } from "@/lib/hooks/useLogger";
 import { formatCurrency } from "@/lib/utils";
@@ -88,10 +89,11 @@ export default function ExpensesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const _receiptImage = useState<string | null>(null);
+  const [scannedReceipt, setScannedReceipt] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detectedExpenses, setDetectedExpenses] = useState<Partial<ExpenseType>[]>([]);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
+  const [isScanDialogOpen, setIsScanDialogOpen] = useState(false);
 
   const analytics = useMemo(() => {
     if (!allExpenses.length) return null;
@@ -317,18 +319,13 @@ export default function ExpensesPage() {
     if (filteredExpenses.length > 0) exportExpensesToCSV(filteredExpenses);
   };
 
-  const handleReceiptUpload = async (event: Event) => {
-    const fileInput = event.target as HTMLInputElement;
-    const file = fileInput.files?.[0];
-    if (!file) return;
-
+  const handleScanAnalyze = async ({ dataUrl, mimeType }: ScanReceiptResult) => {
     try {
       setIsAnalyzing(true);
-      const base64Image = await fileToBase64(file);
-      _receiptImage[1](base64Image);
+      setScannedReceipt(dataUrl);
       toast.loading("Analyzing receipt...");
 
-      const extracted = await analyzeReceipt(base64Image);
+      const extracted = await analyzeReceipt(dataUrl, mimeType);
       if (extracted.length === 0) {
         toast.dismiss();
         toast.error("No expenses detected from the receipt");
@@ -337,13 +334,15 @@ export default function ExpensesPage() {
 
       const expensesWithUser = extracted.map((e) => ({ ...e, userId: user?.uid || "" }));
       setDetectedExpenses(expensesWithUser);
+      setIsScanDialogOpen(false);
       setTimeout(() => setIsReviewDialogOpen(true), 0);
 
       toast.dismiss();
       toast.success(`${extracted.length} items detected from receipt`);
     } catch (err) {
+      toast.dismiss();
       console.error("Error analyzing receipt:", err);
-      toast.error("Failed to analyze receipt");
+      toast.error(err instanceof Error ? err.message : "Failed to analyze receipt");
     } finally {
       setIsAnalyzing(false);
     }
@@ -369,7 +368,7 @@ export default function ExpensesPage() {
       }
       await refetch();
       setIsReviewDialogOpen(false);
-      _receiptImage[1](null);
+      setScannedReceipt(null);
       setDetectedExpenses([]);
       toast.dismiss();
       showSuccessMessage(`${expensesIn.length} expenses added successfully`);
@@ -408,13 +407,7 @@ export default function ExpensesPage() {
             variant="outline"
             size="sm"
             disabled={isAnalyzing}
-            onClick={() => {
-              const fileInput = document.createElement("input");
-              fileInput.type = "file";
-              fileInput.accept = "image/*";
-              fileInput.addEventListener("change", handleReceiptUpload);
-              fileInput.click();
-            }}
+            onClick={() => setIsScanDialogOpen(true)}
           >
             {isAnalyzing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -696,12 +689,20 @@ export default function ExpensesPage() {
         open={isReviewDialogOpen}
         onOpenChange={setIsReviewDialogOpen}
         expenses={detectedExpenses}
+        receiptImage={scannedReceipt}
         onSave={handleSaveMultipleExpenses}
         onCancel={() => {
           setIsReviewDialogOpen(false);
-          _receiptImage[1](null);
+          setScannedReceipt(null);
           setDetectedExpenses([]);
         }}
+      />
+
+      <ScanReceiptDialog
+        open={isScanDialogOpen}
+        onOpenChange={setIsScanDialogOpen}
+        onAnalyze={handleScanAnalyze}
+        isAnalyzing={isAnalyzing}
       />
     </div>
   );

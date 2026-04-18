@@ -1,18 +1,26 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { StatCard } from "@/components/ui/stat-card";
 import { getAllExpenses } from "@/lib/expenses";
 import { ExpenseType, EXPENSE_CATEGORIES } from "@/types/expense";
 import MonthlyBarChart from "@/components/analytics/MonthlyBarChart";
 import CategoryPieChart from "@/components/analytics/CategoryPieChart";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 import {
-  CalendarIcon,
+  Calendar,
   TrendingUp,
   PieChart,
   BarChart3,
@@ -20,18 +28,9 @@ import {
   Wallet,
   Download,
   RefreshCw,
-  ArrowUp,
-  ArrowDown,
-  Sparkles,
 } from "lucide-react";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
-import { motion } from "framer-motion";
-import {
-  PageTransition,
-  StaggerContainer,
-  StaggerItem,
-  ScaleIn,
-} from "@/components/ui/page-transition";
+import { PageTransition, ScaleIn } from "@/components/ui/page-transition";
 import { useLogger } from "@/lib/hooks/useLogger";
 import AIInsights from "@/components/analytics/AIInsights";
 import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar } from "recharts";
@@ -62,6 +61,7 @@ export default function AnalyticsPage() {
   const { logAction } = useLogger();
   const [expenses, setExpenses] = useState<ExpenseType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [trendMonths, setTrendMonths] = useState(6);
 
   const fetchExpenses = useCallback(async () => {
     if (!user) return;
@@ -80,7 +80,6 @@ export default function AnalyticsPage() {
   useEffect(() => {
     if (!user) return;
 
-    // Log page visit
     logAction("page_visited", {
       page: "analytics",
       timestamp: new Date().toISOString(),
@@ -89,7 +88,6 @@ export default function AnalyticsPage() {
     fetchExpenses();
   }, [user, logAction, fetchExpenses]);
 
-  // Enhanced calculations with memoization
   const analytics = useMemo(() => {
     if (expenses.length === 0) return null;
 
@@ -97,7 +95,6 @@ export default function AnalyticsPage() {
     const currentMonth = startOfMonth(now);
     const previousMonth = startOfMonth(subMonths(now, 1));
 
-    // Filter expenses by periods
     const currentMonthExpenses = expenses.filter(
       (expense) => expense.date >= currentMonth && expense.date <= endOfMonth(currentMonth),
     );
@@ -105,16 +102,13 @@ export default function AnalyticsPage() {
       (expense) => expense.date >= previousMonth && expense.date <= endOfMonth(previousMonth),
     );
 
-    // Totals
     const currentTotal = currentMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const previousTotal = previousMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const totalAllTime = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
-    // Growth calculations
     const monthOverMonthGrowth =
       previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal) * 100 : 0;
 
-    // Category analysis
     const categoryTotals: Record<string, number> = {};
     currentMonthExpenses.forEach((expense) => {
       categoryTotals[expense.category] = (categoryTotals[expense.category] || 0) + expense.amount;
@@ -125,11 +119,9 @@ export default function AnalyticsPage() {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
 
-    // Time-based analysis
     const averageDaily = currentMonthExpenses.length > 0 ? currentTotal / now.getDate() : 0;
     const averageTransaction = expenses.length > 0 ? totalAllTime / expenses.length : 0;
 
-    // Find extremes
     const highestExpense = expenses.reduce(
       (max, expense) => (expense.amount > max.amount ? expense : max),
       expenses[0],
@@ -139,9 +131,8 @@ export default function AnalyticsPage() {
       expenses[0],
     );
 
-    // Monthly trend data for charts
     const monthlyData = [];
-    for (let i = 5; i >= 0; i--) {
+    for (let i = trendMonths - 1; i >= 0; i--) {
       const month = subMonths(now, i);
       const monthStart = startOfMonth(month);
       const monthEnd = endOfMonth(month);
@@ -157,7 +148,6 @@ export default function AnalyticsPage() {
       });
     }
 
-    // Category distribution for pie chart
     const categoryData = Object.entries(categoryTotals)
       .map(([category, amount]) => {
         const categoryInfo = EXPENSE_CATEGORIES.find((c) => c.value === category);
@@ -170,7 +160,6 @@ export default function AnalyticsPage() {
       .filter((item) => item.value > 0)
       .sort((a, b) => b.value - a.value);
 
-    // Weekly spending pattern
     const weeklyPattern = Array.from({ length: 7 }, (_, index) => {
       const dayName = [
         "Sunday",
@@ -219,7 +208,7 @@ export default function AnalyticsPage() {
         weeklyPattern,
       },
     };
-  }, [expenses]);
+  }, [expenses, trendMonths]);
 
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
@@ -239,578 +228,359 @@ export default function AnalyticsPage() {
 
   return (
     <PageTransition>
-      <div className="container mx-auto max-w-7xl px-4 py-8">
-        <StaggerContainer className="flex flex-col space-y-8">
-          {/* Enhanced Header */}
-          <StaggerItem>
-            <motion.div
-              className="relative overflow-hidden"
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-pink-500/10 opacity-50" />
-              <div className="from-background/80 via-background/90 to-background/80 relative flex flex-col items-start justify-between gap-6 rounded-2xl border bg-gradient-to-r p-8 shadow-lg backdrop-blur-sm sm:flex-row sm:items-center">
-                <div>
-                  <h1 className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-5xl font-bold tracking-tight text-transparent">
-                    Analytics Hub
-                  </h1>
-                  <p className="text-muted-foreground mt-3 max-w-2xl text-lg">
-                    Deep insights into your spending patterns, trends, and financial behavior
-                  </p>
+      <div className="container mx-auto max-w-7xl px-4 py-6 lg:px-6 lg:py-8">
+        <div className="mb-6 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Insights into your spending patterns and trends.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={fetchExpenses} variant="outline" size="sm" disabled={loading}>
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+              Refresh
+            </Button>
+            <Button variant="outline" size="sm">
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <div className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+          </div>
+        ) : !analytics ? (
+          <Card>
+            <CardContent>
+              <div className="flex flex-col items-center px-6 py-16 text-center">
+                <div className="bg-muted mb-4 rounded-full p-4">
+                  <BarChart3 className="text-muted-foreground h-6 w-6" />
                 </div>
-                <div className="flex gap-3">
-                  <Button
-                    onClick={fetchExpenses}
-                    variant="outline"
-                    disabled={loading}
-                    className="group"
-                  >
-                    <RefreshCw
-                      className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : "transition-transform duration-500 group-hover:rotate-180"}`}
-                    />
-                    Refresh Data
-                  </Button>
-                  <Button variant="outline" className="group">
-                    <Download className="mr-2 h-4 w-4 transition-transform group-hover:translate-y-0.5" />
-                    Export Report
+                <h3 className="text-base font-semibold">No data yet</h3>
+                <p className="text-muted-foreground mt-1 max-w-sm text-sm">
+                  Add your first expense to unlock trends, category breakdowns, and spending
+                  insights.
+                </p>
+                <div className="mt-5">
+                  <Button asChild size="sm">
+                    <Link href="/expenses?add=true">Add your first expense</Link>
                   </Button>
                 </div>
               </div>
-            </motion.div>
-          </StaggerItem>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <ScaleIn delay={0.05}>
+                <StatCard
+                  label="This month"
+                  icon={Calendar}
+                  value={
+                    <span className="tabular-nums">
+                      {formatCurrency(analytics.currentMonth.total)}
+                    </span>
+                  }
+                  hint={
+                    <span>
+                      {analytics.currentMonth.count} expenses · {format(new Date(), "MMM yyyy")}
+                    </span>
+                  }
+                />
+              </ScaleIn>
+              <ScaleIn delay={0.1}>
+                <StatCard
+                  label="vs last month"
+                  icon={TrendingUp}
+                  value={
+                    <span className="tabular-nums">
+                      {analytics.growth.isIncrease ? "+" : ""}
+                      {analytics.growth.monthOverMonth.toFixed(1)}%
+                    </span>
+                  }
+                  trend={
+                    analytics.growth.monthOverMonth !== 0
+                      ? {
+                          value: Math.abs(analytics.growth.monthOverMonth),
+                          isPositive: !analytics.growth.isIncrease,
+                        }
+                      : undefined
+                  }
+                  hint={<span>from {formatCurrency(analytics.previousMonth.total)}</span>}
+                />
+              </ScaleIn>
+              <ScaleIn delay={0.15}>
+                <StatCard
+                  label="Daily average"
+                  icon={Clock}
+                  value={
+                    <span className="tabular-nums">
+                      {formatCurrency(analytics.metrics.averageDaily)}
+                    </span>
+                  }
+                  hint={<span>Based on {new Date().getDate()} days this month</span>}
+                />
+              </ScaleIn>
+              <ScaleIn delay={0.2}>
+                <StatCard
+                  label="All time"
+                  icon={Wallet}
+                  value={
+                    <span className="tabular-nums">
+                      {formatCurrency(analytics.metrics.totalAllTime)}
+                    </span>
+                  }
+                  hint={<span>{analytics.metrics.totalTransactions} transactions</span>}
+                />
+              </ScaleIn>
+            </div>
 
-          {loading ? (
-            <StaggerItem>
-              <div className="flex h-64 items-center justify-center">
-                <div className="space-y-4 text-center">
-                  <div className="border-primary/30 border-t-primary mx-auto h-12 w-12 animate-spin rounded-full border-4"></div>
-                  <p className="text-muted-foreground">Loading your financial insights...</p>
-                </div>
-              </div>
-            </StaggerItem>
-          ) : !analytics ? (
-            <StaggerItem>
-              <Card className="py-16 text-center">
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="bg-muted inline-block rounded-full p-4">
-                      <BarChart3 className="text-muted-foreground h-8 w-8" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold">No Data Available</h3>
-                      <p className="text-muted-foreground">
-                        Start adding expenses to see your analytics
-                      </p>
-                    </div>
-                    <Button asChild>
-                      <a href="/expenses?add=true">Add Your First Expense</a>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </StaggerItem>
-          ) : (
-            <>
-              {/* Enhanced Metrics Cards */}
-              <StaggerItem>
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                  {/* Current Month */}
-                  <ScaleIn delay={0.1}>
-                    <motion.div whileHover={{ y: -5 }} className="group">
-                      <Card className="dark:via-background relative overflow-hidden border-0 bg-gradient-to-br from-blue-50/80 via-white to-indigo-50/80 shadow-lg transition-all duration-500 hover:shadow-2xl dark:from-blue-950/30 dark:to-indigo-950/30">
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-indigo-500/5 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-                        <CardHeader className="relative z-10 flex flex-row items-center justify-between space-y-0 pb-3">
-                          <CardTitle className="text-muted-foreground group-hover:text-foreground text-sm font-semibold transition-colors">
-                            This Month
-                          </CardTitle>
-                          <motion.div
-                            className="rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 p-3 dark:from-blue-900/30 dark:to-indigo-900/30"
-                            animate={{ rotate: [0, 5, -5, 0] }}
-                            transition={{ duration: 4, repeat: Infinity, repeatDelay: 3 }}
-                          >
-                            <CalendarIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                          </motion.div>
-                        </CardHeader>
-                        <CardContent className="relative z-10 space-y-2">
-                          <motion.div
-                            className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 bg-clip-text text-3xl font-bold text-transparent"
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-                          >
-                            {formatCurrency(analytics.currentMonth.total)}
-                          </motion.div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">
-                              {format(new Date(), "MMMM yyyy")}
-                            </span>
-                            <Badge
-                              variant="secondary"
-                              className="bg-blue-100 text-blue-600 dark:bg-blue-900/30"
-                            >
-                              {analytics.currentMonth.count} expenses
-                            </Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </ScaleIn>
-
-                  {/* Growth Comparison */}
-                  <ScaleIn delay={0.2}>
-                    <motion.div whileHover={{ y: -5 }} className="group">
-                      <Card
-                        className={`relative overflow-hidden border-0 ${
-                          analytics.growth.isIncrease
-                            ? "dark:via-background bg-gradient-to-br from-red-50/80 via-white to-orange-50/80 dark:from-red-950/30 dark:to-orange-950/30"
-                            : "dark:via-background bg-gradient-to-br from-green-50/80 via-white to-emerald-50/80 dark:from-green-950/30 dark:to-emerald-950/30"
-                        } shadow-lg transition-all duration-500 hover:shadow-2xl`}
-                      >
-                        <div
-                          className={`absolute inset-0 ${
-                            analytics.growth.isIncrease
-                              ? "bg-gradient-to-br from-red-500/5 via-transparent to-orange-500/5"
-                              : "bg-gradient-to-br from-green-500/5 via-transparent to-emerald-500/5"
-                          } opacity-0 transition-opacity duration-500 group-hover:opacity-100`}
-                        />
-                        <CardHeader className="relative z-10 flex flex-row items-center justify-between space-y-0 pb-3">
-                          <CardTitle className="text-muted-foreground group-hover:text-foreground text-sm font-semibold transition-colors">
-                            vs Last Month
-                          </CardTitle>
-                          <motion.div
-                            className={`rounded-full p-3 ${
-                              analytics.growth.isIncrease
-                                ? "bg-gradient-to-br from-red-100 to-orange-100 dark:from-red-900/30 dark:to-orange-900/30"
-                                : "bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30"
-                            }`}
-                            animate={{
-                              y: analytics.growth.isIncrease ? [-2, 2, -2] : [2, -2, 2],
-                              scale: [1, 1.1, 1],
-                            }}
-                            transition={{ duration: 2, repeat: Infinity, repeatDelay: 4 }}
-                          >
-                            {analytics.growth.isIncrease ? (
-                              <ArrowUp className="h-5 w-5 text-red-600 dark:text-red-400" />
-                            ) : (
-                              <ArrowDown className="h-5 w-5 text-green-600 dark:text-green-400" />
-                            )}
-                          </motion.div>
-                        </CardHeader>
-                        <CardContent className="relative z-10 space-y-2">
-                          <motion.div
-                            className={`text-3xl font-bold ${
-                              analytics.growth.isIncrease
-                                ? "text-red-600 dark:text-red-400"
-                                : "text-green-600 dark:text-green-400"
-                            }`}
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
-                          >
-                            {analytics.growth.isIncrease ? "+" : ""}
-                            {Math.abs(analytics.growth.monthOverMonth).toFixed(1)}%
-                          </motion.div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">
-                              {analytics.growth.isIncrease ? "Increase" : "Decrease"} from{" "}
-                              {formatCurrency(analytics.previousMonth.total)}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </ScaleIn>
-
-                  {/* Average Daily */}
-                  <ScaleIn delay={0.3}>
-                    <motion.div whileHover={{ y: -5 }} className="group">
-                      <Card className="dark:via-background relative overflow-hidden border-0 bg-gradient-to-br from-purple-50/80 via-white to-violet-50/80 shadow-lg transition-all duration-500 hover:shadow-2xl dark:from-purple-950/30 dark:to-violet-950/30">
-                        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-violet-500/5 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-                        <CardHeader className="relative z-10 flex flex-row items-center justify-between space-y-0 pb-3">
-                          <CardTitle className="text-muted-foreground group-hover:text-foreground text-sm font-semibold transition-colors">
-                            Daily Average
-                          </CardTitle>
-                          <motion.div
-                            className="rounded-full bg-gradient-to-br from-purple-100 to-violet-100 p-3 dark:from-purple-900/30 dark:to-violet-900/30"
-                            animate={{ scale: [1, 1.1, 1] }}
-                            transition={{ duration: 3, repeat: Infinity, repeatDelay: 2 }}
-                          >
-                            <Clock className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                          </motion.div>
-                        </CardHeader>
-                        <CardContent className="relative z-10 space-y-2">
-                          <motion.div
-                            className="bg-gradient-to-r from-purple-600 via-violet-600 to-purple-700 bg-clip-text text-3xl font-bold text-transparent"
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 0.5, type: "spring", stiffness: 200 }}
-                          >
-                            {formatCurrency(analytics.metrics.averageDaily)}
-                          </motion.div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">
-                              Based on {new Date().getDate()} days
-                            </span>
-                            <span className="font-medium text-purple-600">This month</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </ScaleIn>
-
-                  {/* Total All Time */}
-                  <ScaleIn delay={0.4}>
-                    <motion.div whileHover={{ y: -5 }} className="group">
-                      <Card className="dark:via-background relative overflow-hidden border-0 bg-gradient-to-br from-orange-50/80 via-white to-amber-50/80 shadow-lg transition-all duration-500 hover:shadow-2xl dark:from-orange-950/30 dark:to-amber-950/30">
-                        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-amber-500/5 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-                        <CardHeader className="relative z-10 flex flex-row items-center justify-between space-y-0 pb-3">
-                          <CardTitle className="text-muted-foreground group-hover:text-foreground text-sm font-semibold transition-colors">
-                            All Time Total
-                          </CardTitle>
-                          <motion.div
-                            className="rounded-full bg-gradient-to-br from-orange-100 to-amber-100 p-3 dark:from-orange-900/30 dark:to-amber-900/30"
-                            animate={{ rotate: [0, 360] }}
-                            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                          >
-                            <Wallet className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                          </motion.div>
-                        </CardHeader>
-                        <CardContent className="relative z-10 space-y-2">
-                          <motion.div
-                            className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 bg-clip-text text-3xl font-bold text-transparent"
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 0.6, type: "spring", stiffness: 200 }}
-                          >
-                            {formatCurrency(analytics.metrics.totalAllTime)}
-                          </motion.div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">
-                              Across {analytics.metrics.totalTransactions} expenses
-                            </span>
-                            <Badge
-                              variant="secondary"
-                              className="bg-orange-100 text-orange-600 dark:bg-orange-900/30"
-                            >
-                              All time
-                            </Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </ScaleIn>
-                </div>
-              </StaggerItem>
-
-              {/* Enhanced Charts Section */}
-              <StaggerItem>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Insights</CardTitle>
+                <CardDescription>Spending breakdowns, trends, and patterns.</CardDescription>
+              </CardHeader>
+              <CardContent>
                 <Tabs defaultValue="trends" className="space-y-6">
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    <TabsList className="glassmorphism grid h-auto w-full grid-cols-4">
-                      <TabsTrigger value="trends" className="px-4 py-3 text-sm font-medium">
-                        <TrendingUp className="mr-2 h-4 w-4" />
-                        Trends
-                      </TabsTrigger>
-                      <TabsTrigger value="categories" className="px-4 py-3 text-sm font-medium">
-                        <PieChart className="mr-2 h-4 w-4" />
-                        Categories
-                      </TabsTrigger>
-                      <TabsTrigger value="patterns" className="px-4 py-3 text-sm font-medium">
-                        <BarChart3 className="mr-2 h-4 w-4" />
-                        Patterns
-                      </TabsTrigger>
-                      <TabsTrigger value="insights" className="px-4 py-3 text-sm font-medium">
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        AI Insights
-                      </TabsTrigger>
-                    </TabsList>
-                  </motion.div>
+                  <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
+                    <TabsTrigger value="trends" className="px-3 py-2 text-sm font-medium">
+                      <TrendingUp className="mr-2 h-4 w-4" />
+                      Trends
+                    </TabsTrigger>
+                    <TabsTrigger value="categories" className="px-3 py-2 text-sm font-medium">
+                      <PieChart className="mr-2 h-4 w-4" />
+                      Categories
+                    </TabsTrigger>
+                    <TabsTrigger value="patterns" className="px-3 py-2 text-sm font-medium">
+                      <BarChart3 className="mr-2 h-4 w-4" />
+                      Patterns
+                    </TabsTrigger>
+                    <TabsTrigger value="insights" className="px-3 py-2 text-sm font-medium">
+                      <Wallet className="mr-2 h-4 w-4" />
+                      AI Insights
+                    </TabsTrigger>
+                  </TabsList>
 
-                  {/* Trends Tab */}
                   <TabsContent value="trends" className="space-y-6">
                     <div className="grid gap-6 lg:grid-cols-2">
-                      <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.5 }}
-                      >
-                        <Card className="h-full">
-                          <CardHeader>
-                            <CardTitle className="flex items-center gap-3">
-                              <TrendingUp className="h-5 w-5 text-blue-600" />
-                              6-Month Spending Trend
+                      <Card>
+                        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+                          <div>
+                            <CardTitle className="text-base">
+                              {trendMonths}-month spending trend
                             </CardTitle>
                             <CardDescription>
-                              Monthly spending progression over time
+                              Monthly spending progression over time.
                             </CardDescription>
-                          </CardHeader>
-                          <CardContent className="h-[400px]">
-                            <MonthlyBarChart data={analytics.charts.monthlyTrend} />
-                          </CardContent>
-                        </Card>
-                      </motion.div>
+                          </div>
+                          <Select
+                            value={String(trendMonths)}
+                            onValueChange={(v) => setTrendMonths(Number(v))}
+                          >
+                            <SelectTrigger className="h-8 w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="3">Last 3 months</SelectItem>
+                              <SelectItem value="6">Last 6 months</SelectItem>
+                              <SelectItem value="12">Last 12 months</SelectItem>
+                              <SelectItem value="24">Last 24 months</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </CardHeader>
+                        <CardContent className="h-[360px]">
+                          <MonthlyBarChart data={analytics.charts.monthlyTrend} />
+                        </CardContent>
+                      </Card>
 
-                      <motion.div
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.6 }}
-                      >
-                        <Card className="h-full">
-                          <CardHeader>
-                            <CardTitle className="flex items-center gap-3">
-                              <BarChart3 className="h-5 w-5 text-green-600" />
-                              Weekly Pattern
-                            </CardTitle>
-                            <CardDescription>
-                              Your spending habits by day of the week
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="h-[400px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={analytics.charts.weeklyPattern} layout="vertical">
-                                <CartesianGrid
-                                  strokeDasharray="3 3"
-                                  horizontal={true}
-                                  vertical={false}
-                                />
-                                <XAxis
-                                  type="number"
-                                  tickFormatter={(value) =>
-                                    formatCurrency(value, { notation: "compact" })
-                                  }
-                                />
-                                <YAxis type="category" dataKey="day" width={80} />
-                                <Tooltip content={<CustomTooltip />} />
-                                <Bar dataKey="amount" fill="#10B981" radius={[0, 4, 4, 0]} />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Weekly pattern</CardTitle>
+                          <CardDescription>Your spending by day of the week.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="h-[360px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={analytics.charts.weeklyPattern} layout="vertical">
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                horizontal={true}
+                                vertical={false}
+                              />
+                              <XAxis
+                                type="number"
+                                tickFormatter={(value) =>
+                                  formatCurrency(value, { notation: "compact" })
+                                }
+                              />
+                              <YAxis type="category" dataKey="day" width={80} />
+                              <Tooltip content={<CustomTooltip />} />
+                              <Bar dataKey="amount" fill="#10B981" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
                     </div>
                   </TabsContent>
 
-                  {/* Categories Tab */}
                   <TabsContent value="categories" className="space-y-6">
                     <div className="grid gap-6 lg:grid-cols-3">
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.5 }}
-                        className="lg:col-span-2"
-                      >
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="flex items-center gap-3">
-                              <PieChart className="h-5 w-5 text-purple-600" />
-                              Category Distribution
-                            </CardTitle>
-                            <CardDescription>
-                              This month&apos;s spending breakdown by category
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="h-[400px]">
-                            <CategoryPieChart data={analytics.categories.distribution} />
-                          </CardContent>
-                        </Card>
-                      </motion.div>
+                      <Card className="lg:col-span-2">
+                        <CardHeader>
+                          <CardTitle className="text-base">Category distribution</CardTitle>
+                          <CardDescription>
+                            This month&apos;s spending breakdown by category.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="h-[360px]">
+                          <CategoryPieChart data={analytics.categories.distribution} />
+                        </CardContent>
+                      </Card>
 
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.6 }}
-                      >
-                        <Card className="h-full">
-                          <CardHeader>
-                            <CardTitle>Top Categories</CardTitle>
-                            <CardDescription>Your biggest spending areas</CardDescription>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            {analytics.categories.top.map((cat, index) => {
-                              const category = EXPENSE_CATEGORIES.find(
-                                (c) => c.value === cat.category,
-                              );
-                              return (
-                                <motion.div
-                                  key={cat.category}
-                                  initial={{ opacity: 0, x: 20 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ delay: 0.7 + index * 0.1 }}
-                                  className="bg-muted/30 hover:bg-muted/50 flex items-center justify-between rounded-lg p-3 transition-colors"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div
-                                      className="h-4 w-4 rounded-full"
-                                      style={{ backgroundColor: getCategoryColor(cat.category) }}
-                                    />
-                                    <span className="font-medium">
-                                      {category?.label || cat.category}
-                                    </span>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="font-bold">{formatCurrency(cat.amount)}</div>
-                                    <div className="text-muted-foreground text-xs">
-                                      {((cat.amount / analytics.currentMonth.total) * 100).toFixed(
-                                        1,
-                                      )}
-                                      %
-                                    </div>
-                                  </div>
-                                </motion.div>
-                              );
-                            })}
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    </div>
-                  </TabsContent>
-
-                  {/* Patterns Tab */}
-                  <TabsContent value="patterns" className="space-y-6">
-                    <div className="grid gap-6 md:grid-cols-2">
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.5 }}
-                      >
-                        <Card>
-                          <CardHeader>
-                            <CardTitle>Expense Range Analysis</CardTitle>
-                            <CardDescription>Your spending range this month</CardDescription>
-                          </CardHeader>
-                          <CardContent className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="rounded-lg bg-red-50 p-4 text-center dark:bg-red-950/20">
-                                <div className="text-2xl font-bold text-red-600">
-                                  {formatCurrency(analytics.metrics.highestExpense.amount)}
-                                </div>
-                                <div className="text-muted-foreground text-xs">Highest Expense</div>
-                                <div className="text-muted-foreground mt-1 truncate text-xs">
-                                  {analytics.metrics.highestExpense.description}
-                                </div>
-                              </div>
-                              <div className="rounded-lg bg-green-50 p-4 text-center dark:bg-green-950/20">
-                                <div className="text-2xl font-bold text-green-600">
-                                  {formatCurrency(analytics.metrics.lowestExpense.amount)}
-                                </div>
-                                <div className="text-muted-foreground text-xs">Lowest Expense</div>
-                                <div className="text-muted-foreground mt-1 truncate text-xs">
-                                  {analytics.metrics.lowestExpense.description}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="rounded-lg bg-blue-50 p-4 text-center dark:bg-blue-950/20">
-                              <div className="text-2xl font-bold text-blue-600">
-                                {formatCurrency(analytics.metrics.averageTransaction)}
-                              </div>
-                              <div className="text-muted-foreground text-xs">
-                                Average Transaction
-                              </div>
-                              <div className="text-muted-foreground text-xs">
-                                Across all {analytics.metrics.totalTransactions} expenses
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.6 }}
-                      >
-                        <Card>
-                          <CardHeader>
-                            <CardTitle>Spending Velocity</CardTitle>
-                            <CardDescription>How your spending pace compares</CardDescription>
-                          </CardHeader>
-                          <CardContent className="space-y-6">
-                            <div className="space-y-4">
-                              <div>
-                                <div className="mb-2 flex justify-between text-sm">
-                                  <span>This Month Progress</span>
-                                  <span className="font-medium">
-                                    {new Date().getDate()} of{" "}
-                                    {new Date(
-                                      new Date().getFullYear(),
-                                      new Date().getMonth() + 1,
-                                      0,
-                                    ).getDate()}{" "}
-                                    days
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Top categories</CardTitle>
+                          <CardDescription>Your biggest spending areas.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {analytics.categories.top.map((cat) => {
+                            const category = EXPENSE_CATEGORIES.find(
+                              (c) => c.value === cat.category,
+                            );
+                            const pct =
+                              analytics.currentMonth.total > 0
+                                ? (cat.amount / analytics.currentMonth.total) * 100
+                                : 0;
+                            return (
+                              <div
+                                key={cat.category}
+                                className="hover:bg-muted/60 flex items-center justify-between rounded-md px-2 py-2 transition-colors"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span
+                                    className="h-2.5 w-2.5 rounded-full"
+                                    style={{ backgroundColor: getCategoryColor(cat.category) }}
+                                  />
+                                  <span className="text-sm font-medium">
+                                    {category?.label || cat.category}
                                   </span>
                                 </div>
-                                <div className="bg-muted h-2 w-full rounded-full">
-                                  <div
-                                    className="bg-primary h-2 rounded-full transition-all duration-1000"
-                                    style={{
-                                      width: `${(new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()) * 100}%`,
-                                    }}
-                                  />
-                                </div>
-                              </div>
-
-                              <div>
-                                <div className="mb-2 flex justify-between text-sm">
-                                  <span>Budget Utilization</span>
-                                  <span className="font-medium">Estimated</span>
-                                </div>
-                                <div className="bg-muted h-2 w-full rounded-full">
-                                  <div
-                                    className="h-2 rounded-full bg-gradient-to-r from-green-500 to-yellow-500 transition-all duration-1000"
-                                    style={{ width: "68%" }}
-                                  />
-                                </div>
-                                <div className="text-muted-foreground mt-1 text-xs">
-                                  68% of estimated budget used
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-3 pt-2">
-                                <div className="bg-muted/30 rounded-lg p-3 text-center">
-                                  <div className="text-lg font-bold text-purple-600">
-                                    {analytics.currentMonth.count}
+                                <div className="text-right">
+                                  <div className="text-sm font-semibold tabular-nums">
+                                    {formatCurrency(cat.amount)}
                                   </div>
-                                  <div className="text-muted-foreground text-xs">Transactions</div>
-                                </div>
-                                <div className="bg-muted/30 rounded-lg p-3 text-center">
-                                  <div className="text-lg font-bold text-orange-600">
-                                    {(analytics.currentMonth.count / new Date().getDate()).toFixed(
-                                      1,
-                                    )}
+                                  <div className="text-muted-foreground text-xs tabular-nums">
+                                    {pct.toFixed(1)}%
                                   </div>
-                                  <div className="text-muted-foreground text-xs">Per Day</div>
                                 </div>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
+                            );
+                          })}
+                        </CardContent>
+                      </Card>
                     </div>
                   </TabsContent>
 
-                  {/* AI Insights Tab */}
+                  <TabsContent value="patterns" className="space-y-6">
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Expense range</CardTitle>
+                          <CardDescription>
+                            Your spending range across all expenses.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-muted/40 rounded-md p-4">
+                              <div className="text-muted-foreground text-xs">Highest</div>
+                              <div className="mt-1 text-xl font-semibold tabular-nums">
+                                {formatCurrency(analytics.metrics.highestExpense.amount)}
+                              </div>
+                              <div className="text-muted-foreground mt-1 truncate text-xs">
+                                {analytics.metrics.highestExpense.description}
+                              </div>
+                            </div>
+                            <div className="bg-muted/40 rounded-md p-4">
+                              <div className="text-muted-foreground text-xs">Lowest</div>
+                              <div className="mt-1 text-xl font-semibold tabular-nums">
+                                {formatCurrency(analytics.metrics.lowestExpense.amount)}
+                              </div>
+                              <div className="text-muted-foreground mt-1 truncate text-xs">
+                                {analytics.metrics.lowestExpense.description}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="bg-muted/40 rounded-md p-4">
+                            <div className="text-muted-foreground text-xs">Average transaction</div>
+                            <div className="mt-1 text-xl font-semibold tabular-nums">
+                              {formatCurrency(analytics.metrics.averageTransaction)}
+                            </div>
+                            <div className="text-muted-foreground mt-1 text-xs">
+                              Across all {analytics.metrics.totalTransactions} expenses
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Spending velocity</CardTitle>
+                          <CardDescription>How your spending pace compares.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-5">
+                          <div>
+                            <div className="mb-2 flex justify-between text-sm">
+                              <span className="text-muted-foreground">This month progress</span>
+                              <span className="font-medium tabular-nums">
+                                {new Date().getDate()} of{" "}
+                                {new Date(
+                                  new Date().getFullYear(),
+                                  new Date().getMonth() + 1,
+                                  0,
+                                ).getDate()}{" "}
+                                days
+                              </span>
+                            </div>
+                            <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+                              <div
+                                className="bg-primary h-full rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${(new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()) * 100}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-muted/40 rounded-md p-3">
+                              <div className="text-muted-foreground text-xs">Transactions</div>
+                              <div className="mt-1 text-lg font-semibold tabular-nums">
+                                {analytics.currentMonth.count}
+                              </div>
+                            </div>
+                            <div className="bg-muted/40 rounded-md p-3">
+                              <div className="text-muted-foreground text-xs">Per day</div>
+                              <div className="mt-1 text-lg font-semibold tabular-nums">
+                                {(analytics.currentMonth.count / new Date().getDate()).toFixed(1)}
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+
                   <TabsContent value="insights" className="space-y-6">
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 }}
-                    >
-                      <AIInsights
-                        expenses={expenses}
-                        className="shadow-lg transition-all duration-500 hover:shadow-2xl"
-                      />
-                    </motion.div>
+                    <AIInsights expenses={expenses} />
                   </TabsContent>
                 </Tabs>
-              </StaggerItem>
-            </>
-          )}
-        </StaggerContainer>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </PageTransition>
   );

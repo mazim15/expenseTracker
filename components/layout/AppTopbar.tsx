@@ -16,7 +16,6 @@ const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
   expenses: "Expenses",
   analytics: "Analytics",
-  activity: "Activity",
   settings: "Settings",
   categories: "Categories",
   logs: "Logs",

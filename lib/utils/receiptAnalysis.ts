@@ -42,26 +42,43 @@ interface ExtractedReceiptItem {
 //  category?: string;
 //}
 
+const DEFAULT_MIME = "image/jpeg";
+const SUPPORTED_MIMES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+
+function resolveMimeType(imageData: string, explicitMime?: string): string {
+  if (explicitMime && SUPPORTED_MIMES.has(explicitMime)) return explicitMime;
+  const match = imageData.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
+  if (match && SUPPORTED_MIMES.has(match[1])) return match[1];
+  return DEFAULT_MIME;
+}
+
 /**
- * Analyzes a receipt image using Gemini 2.0 Flash
- * @param imageData Base64 encoded image data
- * @returns Extracted expense data for multiple items
+ * Analyzes a receipt image using Gemini.
+ * @param imageData Base64 encoded image data (data URL or raw base64)
+ * @param mimeType Optional explicit mime type; otherwise inferred from data URL
  */
-export async function analyzeReceipt(imageData: string): Promise<Partial<ExpenseType>[]> {
+export async function analyzeReceipt(
+  imageData: string,
+  mimeType?: string,
+): Promise<Partial<ExpenseType>[]> {
   try {
     if (!API_KEY) {
       throw new Error("Missing Gemini API key");
     }
 
-    // Make sure we have valid base64 image data
     if (!imageData || !imageData.includes("base64")) {
       throw new Error("Invalid image data");
     }
 
-    // Extract the base64 portion correctly
     const base64Data = imageData.split(",")[1] || imageData;
+    const resolvedMime = resolveMimeType(imageData, mimeType);
 
-    // Prepare request to Gemini API with prompt that asks for multiple items
     const requestBody = {
       contents: [
         {
@@ -71,7 +88,7 @@ export async function analyzeReceipt(imageData: string): Promise<Partial<Expense
             },
             {
               inline_data: {
-                mime_type: "image/jpeg", // This might need to be dynamic based on image type
+                mime_type: resolvedMime,
                 data: base64Data,
               },
             },
