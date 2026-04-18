@@ -19,9 +19,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { AlertCircle, Check, Brain } from "lucide-react";
+import { AlertCircle, Check } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AIService } from "@/lib/ai";
 
 interface UserProfileUpdate {
   displayName?: string | null;
@@ -37,13 +36,6 @@ export default function SettingsPage() {
 
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
-
-  const aiService = AIService.getInstance();
-  const isAIAvailable = aiService.isAIEnabled();
-
-  // Debug logging
-  console.log("Settings:", settings);
-  console.log("AI Available:", isAIAvailable);
 
   useEffect(() => {
     if (user) {
@@ -118,7 +110,6 @@ export default function SettingsPage() {
           <TabsList>
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
-            <TabsTrigger value="ai">AI Features</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
 
@@ -255,102 +246,6 @@ export default function SettingsPage() {
                 <div className="flex justify-end">
                   <Button onClick={handleSettingsUpdate} disabled={loading}>
                     {loading ? "Saving..." : "Save Preferences"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="ai" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Brain className="text-primary h-5 w-5" />
-                  AI Features
-                </CardTitle>
-                <CardDescription>
-                  Configure AI-powered features for better expense management
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {!isAIAvailable && (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      AI features are not available. Please configure your Gemini API key to enable
-                      intelligent expense analysis.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {success && (
-                  <Alert className="mb-4 border-green-500 text-green-700">
-                    <Check className="h-4 w-4" />
-                    <AlertDescription>{success}</AlertDescription>
-                  </Alert>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="autoCategorizationEnabled">Smart Auto-Categorization</Label>
-                    <p className="text-muted-foreground text-sm">
-                      Automatically suggest categories for new expenses based on description and
-                      your spending history
-                    </p>
-                  </div>
-                  <Switch
-                    id="autoCategorizationEnabled"
-                    checked={settings.autoCategorizationEnabled}
-                    onCheckedChange={(checked) =>
-                      updateSettings({ autoCategorizationEnabled: checked })
-                    }
-                    disabled={!isAIAvailable}
-                  />
-                </div>
-
-                <Separator />
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="aiInsightsEnabled">AI Insights</Label>
-                    <p className="text-muted-foreground text-sm">
-                      Generate intelligent spending insights, anomaly detection, and personalized
-                      recommendations
-                    </p>
-                    <p className="text-muted-foreground text-xs">
-                      Current: {settings.aiInsightsEnabled ? "ON" : "OFF"} | API Available:{" "}
-                      {isAIAvailable ? "YES" : "NO"}
-                    </p>
-                  </div>
-                  <Switch
-                    id="aiInsightsEnabled"
-                    checked={settings.aiInsightsEnabled}
-                    onCheckedChange={(checked) => {
-                      console.log("Toggle clicked:", checked);
-                      updateSettings({ aiInsightsEnabled: checked });
-                    }}
-                    disabled={!isAIAvailable}
-                  />
-                </div>
-
-                <Separator />
-
-                <div className="bg-muted/30 rounded-lg border p-4">
-                  <h4 className="mb-2 text-sm font-medium">Available AI Features:</h4>
-                  <ul className="text-muted-foreground space-y-1 text-sm">
-                    <li>• Smart expense categorization with learning from your habits</li>
-                    <li>• Spending pattern analysis and trend detection</li>
-                    <li>• Anomaly detection for unusual transactions</li>
-                    <li>• Personalized budget recommendations</li>
-                    <li>• Natural language spending insights</li>
-                    <li>• Financial health scoring</li>
-                    <li>• Savings opportunity identification</li>
-                  </ul>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={handleSettingsUpdate} disabled={loading || !isAIAvailable}>
-                    {loading ? "Saving..." : "Save AI Settings"}
                   </Button>
                 </div>
               </CardContent>

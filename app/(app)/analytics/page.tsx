@@ -32,7 +32,6 @@ import {
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { PageTransition, ScaleIn } from "@/components/ui/page-transition";
 import { useLogger } from "@/lib/hooks/useLogger";
-import AIInsights from "@/components/analytics/AIInsights";
 import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar } from "recharts";
 
 interface CustomTooltipProps {
@@ -345,7 +344,7 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="trends" className="space-y-6">
-                  <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
+                  <TabsList className="grid h-auto w-full grid-cols-3">
                     <TabsTrigger value="trends" className="px-3 py-2 text-sm font-medium">
                       <TrendingUp className="mr-2 h-4 w-4" />
                       Trends
@@ -357,10 +356,6 @@ export default function AnalyticsPage() {
                     <TabsTrigger value="patterns" className="px-3 py-2 text-sm font-medium">
                       <BarChart3 className="mr-2 h-4 w-4" />
                       Patterns
-                    </TabsTrigger>
-                    <TabsTrigger value="insights" className="px-3 py-2 text-sm font-medium">
-                      <Wallet className="mr-2 h-4 w-4" />
-                      AI Insights
                     </TabsTrigger>
                   </TabsList>
 
@@ -571,10 +566,6 @@ export default function AnalyticsPage() {
                         </CardContent>
                       </Card>
                     </div>
-                  </TabsContent>
-
-                  <TabsContent value="insights" className="space-y-6">
-                    <AIInsights expenses={expenses} />
                   </TabsContent>
                 </Tabs>
               </CardContent>

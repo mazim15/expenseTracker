@@ -15,7 +15,6 @@ import { StatCard } from "@/components/ui/stat-card";
 import ExpenseList from "@/components/expenses/ExpenseList";
 import MonthlyBarChart from "@/components/analytics/MonthlyBarChart";
 import CategoryPieChart from "@/components/analytics/CategoryPieChart";
-import AIInsights from "@/components/analytics/AIInsights";
 
 import {
   ArrowRight,
@@ -270,12 +269,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        <div className="lg:col-span-3">
-          <AIInsights expenses={expenses} className="h-full" />
-        </div>
-
-        <Card className="lg:col-span-2">
+      <div className="grid gap-4">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div>
               <CardTitle>Recent expenses</CardTitle>
