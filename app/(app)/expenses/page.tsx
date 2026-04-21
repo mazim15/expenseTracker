@@ -63,6 +63,22 @@ export default function ExpensesPage() {
 
   const expensesQuery = useExpensesQuery(user?.uid);
   const allExpenses = useMemo(() => expensesQuery.data ?? [], [expensesQuery.data]);
+
+  const knownTags = useMemo(() => {
+    const counts = new Map<string, { display: string; count: number }>();
+    for (const exp of allExpenses) {
+      for (const tag of exp.tags ?? []) {
+        const key = tag.trim().toLowerCase();
+        if (!key) continue;
+        const existing = counts.get(key);
+        if (existing) existing.count += 1;
+        else counts.set(key, { display: tag.trim(), count: 1 });
+      }
+    }
+    return Array.from(counts.values())
+      .sort((a, b) => b.count - a.count)
+      .map((t) => t.display);
+  }, [allExpenses]);
   const loading = expensesQuery.isLoading;
   const createMutation = useCreateExpenseMutation(user?.uid);
   const updateMutation = useUpdateExpenseMutation(user?.uid);
@@ -325,20 +341,15 @@ export default function ExpensesPage() {
       setScannedReceipt(dataUrl);
       toast.loading("Analyzing receipt...");
 
-      const extracted = await analyzeReceipt(dataUrl, mimeType);
-      if (extracted.length === 0) {
-        toast.dismiss();
-        toast.error("No expenses detected from the receipt");
-        return;
-      }
+      const extracted = await analyzeReceipt(dataUrl, mimeType, { knownTags });
 
-      const expensesWithUser = extracted.map((e) => ({ ...e, userId: user?.uid || "" }));
-      setDetectedExpenses(expensesWithUser);
+      const expenseWithUser = { ...extracted, userId: user?.uid || "" };
+      setDetectedExpenses([expenseWithUser]);
       setIsScanDialogOpen(false);
       setTimeout(() => setIsReviewDialogOpen(true), 0);
 
       toast.dismiss();
-      toast.success(`${extracted.length} items detected from receipt`);
+      toast.success("Receipt scanned");
     } catch (err) {
       toast.dismiss();
       console.error("Error analyzing receipt:", err);

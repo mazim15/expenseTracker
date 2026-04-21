@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useForm, Controller } from "react-hook-form";
 import { format } from "date-fns";
-import { Loader2, Plus, Upload, X } from "lucide-react";
+import { Loader2, Plus, ScanLine, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -29,10 +29,12 @@ import {
 import { ExpenseType, EXPENSE_CATEGORIES, ExpenseCategoryType } from "@/types/expense";
 import { expenseFormSchema } from "@/lib/validations/expense";
 import CategoryDialog from "./CategoryDialog";
-import { analyzeReceipt, fileToBase64 } from "@/lib/utils/receiptAnalysis";
+import ScanReceiptDialog, { ScanReceiptResult } from "./ScanReceiptDialog";
+import { analyzeReceipt } from "@/lib/utils/receiptAnalysis";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { getUserCategories } from "@/lib/categories";
 import { useLogger } from "@/lib/hooks/useLogger";
+import { useExpensesQuery } from "@/lib/queries/expenses";
 
 type ExpenseDialogProps = {
   expense?: ExpenseType;
@@ -64,8 +66,26 @@ function defaultValues(expense?: ExpenseType): FormValues {
 export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: ExpenseDialogProps) {
   const { user } = useAuth();
   const { logAction, logError } = useLogger();
+  const expensesQuery = useExpensesQuery(user?.uid);
+
+  const knownTags = useMemo(() => {
+    const counts = new Map<string, { display: string; count: number }>();
+    for (const exp of expensesQuery.data ?? []) {
+      for (const tag of exp.tags ?? []) {
+        const key = tag.trim().toLowerCase();
+        if (!key) continue;
+        const existing = counts.get(key);
+        if (existing) existing.count += 1;
+        else counts.set(key, { display: tag.trim(), count: 1 });
+      }
+    }
+    return Array.from(counts.values())
+      .sort((a, b) => b.count - a.count)
+      .map((t) => t.display);
+  }, [expensesQuery.data]);
 
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [scanDialogOpen, setScanDialogOpen] = useState(false);
   const [localCategories, setLocalCategories] = useState(EXPENSE_CATEGORIES);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -109,14 +129,14 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
 
   const tags = form.watch("tags");
 
-  const addTag = () => {
-    const next = tagInput.trim();
+  const addTag = (tagValue?: string) => {
+    const next = (tagValue ?? tagInput).trim();
     if (!next) return;
     if (next.length > 30) {
       toast.error("Tag must be 30 characters or less");
       return;
     }
-    if (tags.includes(next)) {
+    if (tags.some((t) => t.toLowerCase() === next.toLowerCase())) {
       toast.error("Tag already exists");
       return;
     }
@@ -128,6 +148,15 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
     setTagInput("");
   };
 
+  const tagSuggestions = useMemo(() => {
+    const query = tagInput.trim().toLowerCase();
+    const selected = new Set(tags.map((t) => t.toLowerCase()));
+    return knownTags
+      .filter((tag) => !selected.has(tag.toLowerCase()))
+      .filter((tag) => (query ? tag.toLowerCase().includes(query) : true))
+      .slice(0, 8);
+  }, [knownTags, tagInput, tags]);
+
   const removeTag = (tag: string) => {
     form.setValue(
       "tags",
@@ -136,33 +165,42 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
     );
   };
 
-  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleScanAnalyze = async ({ dataUrl, mimeType }: ScanReceiptResult) => {
     try {
-      await logAction("receipt_upload_started", {
-        fileName: file.name,
-        fileSize: file.size,
-      });
-      const base64 = await fileToBase64(file);
-      setReceiptImage(base64);
+      await logAction("receipt_analysis_started", { mimeType });
+      setReceiptImage(dataUrl);
       setIsAnalyzing(true);
       toast.loading("Analyzing receipt...");
-      const extracted = await analyzeReceipt(base64);
-      if (extracted && extracted.length > 0) {
-        const first = extracted[0];
-        if (first.amount) form.setValue("amount", first.amount);
-        if (first.date) form.setValue("date", format(first.date, "yyyy-MM-dd"));
-        if (first.category) form.setValue("category", first.category);
-        if (first.description) form.setValue("description", first.description);
+      const extracted = await analyzeReceipt(dataUrl, mimeType, { knownTags });
+      if (extracted.amount) form.setValue("amount", extracted.amount);
+      if (extracted.date) form.setValue("date", format(extracted.date, "yyyy-MM-dd"));
+      if (extracted.category) form.setValue("category", extracted.category);
+      if (extracted.description) form.setValue("description", extracted.description);
+      if (extracted.location) form.setValue("location", extracted.location);
+      if (extracted.tags && extracted.tags.length > 0) {
+        const existing = form.getValues("tags");
+        const merged: string[] = [...existing];
+        const seen = new Set(existing.map((t) => t.toLowerCase()));
+        for (const tag of extracted.tags) {
+          const key = tag.toLowerCase();
+          if (seen.has(key)) continue;
+          if (merged.length >= 10) break;
+          merged.push(tag);
+          seen.add(key);
+        }
+        form.setValue("tags", merged, { shouldDirty: true });
       }
       toast.dismiss();
       toast.success("Receipt analyzed");
+      setScanDialogOpen(false);
+      if (!extracted.location) {
+        toast.info("No location detected — add it manually if you'd like.");
+      }
     } catch (err) {
       toast.dismiss();
-      toast.error("Failed to analyze receipt");
-      await logError(err as Error, "receipt_analysis_failed", { fileName: file.name });
+      toast.error(err instanceof Error ? err.message : "Failed to analyze receipt");
+      await logError(err as Error, "receipt_analysis_failed", { mimeType });
+      setReceiptImage(null);
     } finally {
       setIsAnalyzing(false);
     }
@@ -393,12 +431,32 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                         variant="outline"
                         size="sm"
                         className="h-9 w-9"
-                        onClick={addTag}
+                        onClick={() => addTag()}
                         disabled={tags.length >= 10}
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
                     </div>
+                    {tagSuggestions.length > 0 && tags.length < 10 && (
+                      <div className="mt-2">
+                        <p className="text-muted-foreground mb-1 text-[10px] tracking-wide uppercase">
+                          Suggestions
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {tagSuggestions.map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => addTag(tag)}
+                              className="border-border bg-muted/50 hover:bg-muted inline-flex h-6 items-center gap-1 rounded-full border px-2 text-xs"
+                            >
+                              <Plus className="h-2.5 w-2.5" />
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -421,26 +479,23 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                       size="sm"
                       className="mt-1 h-7 w-full text-xs"
                       onClick={() => setReceiptImage(null)}
+                      disabled={isAnalyzing}
                     >
                       Remove
                     </Button>
                   </div>
                 ) : (
-                  <label
-                    htmlFor="receipt-upload"
-                    className="hover:bg-muted/50 flex cursor-pointer items-center justify-center rounded border border-dashed py-2"
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 w-full"
+                    onClick={() => setScanDialogOpen(true)}
+                    disabled={isAnalyzing}
                   >
-                    <Upload className="text-muted-foreground mr-2 h-4 w-4" />
-                    <span className="text-muted-foreground text-xs">Upload receipt</span>
-                    <input
-                      id="receipt-upload"
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleReceiptUpload}
-                      disabled={isAnalyzing}
-                    />
-                  </label>
+                    <ScanLine className="mr-2 h-4 w-4" />
+                    Scan receipt
+                  </Button>
                 )}
                 {isAnalyzing && (
                   <div className="mt-2 flex items-center gap-2 text-xs">
@@ -465,6 +520,13 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
           open={categoryDialogOpen}
           onOpenChange={setCategoryDialogOpen}
           onCategoriesUpdate={setLocalCategories}
+        />
+
+        <ScanReceiptDialog
+          open={scanDialogOpen}
+          onOpenChange={setScanDialogOpen}
+          onAnalyze={handleScanAnalyze}
+          isAnalyzing={isAnalyzing}
         />
       </DialogContent>
     </Dialog>

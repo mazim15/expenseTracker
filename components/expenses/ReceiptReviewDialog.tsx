@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -126,8 +127,8 @@ export default function ReceiptReviewDialog({
                     </div>
 
                     {expenses.map((expense, index) => (
-                      <div key={index} className="grid grid-cols-12 items-center gap-2">
-                        <div className="col-span-1">
+                      <div key={index} className="grid grid-cols-12 items-start gap-2">
+                        <div className="col-span-1 pt-2">
                           <Checkbox
                             id={`item-${index}`}
                             checked={selectedItems[index]}
@@ -135,11 +136,15 @@ export default function ReceiptReviewDialog({
                           />
                         </div>
                         <div className="col-span-5">
-                          <Input
+                          <Textarea
                             value={expense.description || ""}
                             onChange={(e) =>
                               handleUpdateExpense(index, "description", e.target.value)
                             }
+                            rows={Math.min(
+                              10,
+                              Math.max(2, (expense.description || "").split("\n").length),
+                            )}
                             className={!selectedItems[index] ? "opacity-50" : ""}
                           />
                         </div>

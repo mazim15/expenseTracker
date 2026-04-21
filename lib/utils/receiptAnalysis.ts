@@ -4,19 +4,23 @@ const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 const API_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
-// Check for API key presence at the top of the file
 if (!API_KEY) {
   console.error(
     "Missing Gemini API key. Make sure NEXT_PUBLIC_GEMINI_API_KEY is set in .env.local file.",
   );
 }
 
-// Define interfaces for receipt data
 interface ExtractedReceiptData {
   merchant?: string;
   date?: string;
   items: ExtractedReceiptItem[];
   total?: number;
+  location?: string;
+  tags?: string[];
+}
+
+export interface AnalyzeReceiptOptions {
+  knownTags?: string[];
 }
 
 interface ExtractedReceiptItem {
@@ -25,21 +29,6 @@ interface ExtractedReceiptItem {
   category?: string;
   quantity?: number;
 }
-
-// Remove the unused interface
-// interface ReceiptData {
-//   items: ReceiptItem[];
-//   total: number;
-//   date?: string;
-//   merchant?: string;
-// }
-
-//interface ReceiptItem {
-//  name: string;
-//  price: number;
-//  quantity?: number;
-//  category?: string;
-//}
 
 const DEFAULT_MIME = "image/jpeg";
 const SUPPORTED_MIMES = new Set([
@@ -50,6 +39,8 @@ const SUPPORTED_MIMES = new Set([
   "image/heif",
 ]);
 
+const UNREADABLE_RECEIPT_ERROR = "Could not read receipt. Try a clearer photo.";
+
 function resolveMimeType(imageData: string, explicitMime?: string): string {
   if (explicitMime && SUPPORTED_MIMES.has(explicitMime)) return explicitMime;
   const match = imageData.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
@@ -57,198 +48,246 @@ function resolveMimeType(imageData: string, explicitMime?: string): string {
   return DEFAULT_MIME;
 }
 
+function toNumber(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const cleaned = value.replace(/[^0-9.\-]/g, "");
+    const parsed = parseFloat(cleaned);
+    return parsed;
+  }
+  return NaN;
+}
+
+function pickCategory(
+  categoryHint: string | undefined,
+  itemName: string | undefined,
+): ExpenseCategory {
+  const hint = categoryHint?.toLowerCase() || "";
+  if (hint) {
+    const match = EXPENSE_CATEGORIES.find(
+      (cat) =>
+        hint.includes(cat.value) ||
+        cat.value.includes(hint) ||
+        hint.includes(cat.label.toLowerCase()) ||
+        cat.label.toLowerCase().includes(hint),
+    );
+    if (match) return match.value as ExpenseCategory;
+  }
+  if (itemName) {
+    const name = itemName.toLowerCase();
+    if (
+      name.includes("food") ||
+      name.includes("meal") ||
+      name.includes("snack") ||
+      name.includes("drink") ||
+      name.includes("cup") ||
+      name.includes("pack")
+    ) {
+      return "food";
+    }
+  }
+  return "other";
+}
+
+function mostCommonCategory(items: ExtractedReceiptItem[]): ExpenseCategory {
+  if (items.length === 0) return "other";
+  const counts = new Map<ExpenseCategory, number>();
+  for (const item of items) {
+    const cat = pickCategory(item.category, item.name);
+    counts.set(cat, (counts.get(cat) ?? 0) + 1);
+  }
+  let winner: ExpenseCategory = "other";
+  let best = -1;
+  for (const [cat, count] of counts) {
+    if (count > best) {
+      winner = cat;
+      best = count;
+    }
+  }
+  return winner;
+}
+
+function formatMoney(value: number): string {
+  if (!Number.isFinite(value)) return "";
+  return value.toFixed(2);
+}
+
+function buildDescription(merchant: string | undefined, items: ExtractedReceiptItem[]): string {
+  const header = merchant?.trim() || "Receipt";
+  if (items.length === 0) return header;
+  const lines = items.map((item) => {
+    const qty = item.quantity && item.quantity > 1 ? `${item.quantity}x ` : "";
+    const price = toNumber(item.price);
+    const priceStr = Number.isFinite(price) && price > 0 ? ` — ${formatMoney(price)}` : "";
+    return `- ${qty}${item.name}${priceStr}`;
+  });
+  return `${header}\n${lines.join("\n")}`;
+}
+
 /**
- * Analyzes a receipt image using Gemini.
- * @param imageData Base64 encoded image data (data URL or raw base64)
- * @param mimeType Optional explicit mime type; otherwise inferred from data URL
+ * Analyzes a receipt image using Gemini and returns a single aggregated expense.
+ * Throws if the receipt can't be parsed into a usable expense.
  */
 export async function analyzeReceipt(
   imageData: string,
   mimeType?: string,
-): Promise<Partial<ExpenseType>[]> {
-  try {
-    if (!API_KEY) {
-      throw new Error("Missing Gemini API key");
-    }
-
-    if (!imageData || !imageData.includes("base64")) {
-      throw new Error("Invalid image data");
-    }
-
-    const base64Data = imageData.split(",")[1] || imageData;
-    const resolvedMime = resolveMimeType(imageData, mimeType);
-
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            {
-              text: 'Please analyze this receipt and extract the following information in JSON format: \n\n1. Store/merchant name\n2. Date of purchase\n3. Individual items with their prices\n\nReturn results in this JSON structure:\n{\n  "merchant": "store name",\n  "date": "YYYY-MM-DD",\n  "items": [\n    {"name": "item description", "price": 00.00, "category": "food/entertainment/etc"}, \n    {...}\n  ],\n  "total": 00.00\n}',
-            },
-            {
-              inline_data: {
-                mime_type: resolvedMime,
-                data: base64Data,
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 1024,
-      },
-    };
-
-    console.log("Sending request to Gemini API...");
-
-    // Call the Gemini API with better error handling
-    const response = await fetch(`${API_URL}?key=${API_KEY}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`API error (${response.status}):`, errorText);
-      throw new Error(`API error: ${response.status} - ${errorText.substring(0, 100)}`);
-    }
-
-    const result = await response.json();
-
-    // Check if we have valid data
-    if (
-      !result.candidates ||
-      !result.candidates[0] ||
-      !result.candidates[0].content ||
-      !result.candidates[0].content.parts
-    ) {
-      console.error("Invalid response structure:", result);
-      throw new Error("Invalid response structure from Gemini API");
-    }
-
-    const textContent = result.candidates[0].content.parts[0].text;
-
-    // Extract JSON from response (it may be wrapped in code blocks or contain extra text)
-    const jsonMatch =
-      textContent.match(/```json\n([\s\S]*?)\n```/) ||
-      textContent.match(/```\n([\s\S]*?)\n```/) ||
-      textContent.match(/{[\s\S]*?}/);
-
-    let extractedData: ExtractedReceiptData = { items: [] };
-
-    if (jsonMatch) {
-      try {
-        // Try to parse the JSON content
-        extractedData = JSON.parse(jsonMatch[0].replace(/```json\n|```\n|```/g, ""));
-      } catch (e) {
-        console.error("Failed to parse JSON from response", e);
-        // Fall back to trying to parse the entire text as JSON
-        try {
-          extractedData = JSON.parse(textContent);
-        } catch (e2) {
-          console.error("Failed to parse entire response as JSON", e2);
-        }
-      }
-    } else {
-      // If no JSON format is detected, try to parse the entire text
-      try {
-        extractedData = JSON.parse(textContent);
-      } catch (e) {
-        console.error("Failed to parse response text as JSON", e);
-      }
-    }
-
-    // Inside analyzeReceipt function, add detailed logging
-    console.log("Raw Gemini response:", textContent);
-    console.log("Extracted data:", extractedData);
-    console.log(
-      "Mapped expense items:",
-      extractedData.items?.map((item: ExtractedReceiptItem) =>
-        mapToExpenseType(item, extractedData.date, extractedData.merchant),
-      ) || [],
-    );
-
-    // Make sure we handle empty cases more robustly
-    if (
-      !extractedData.items ||
-      !Array.isArray(extractedData.items) ||
-      extractedData.items.length === 0
-    ) {
-      console.log("No items found in receipt, creating fallback item");
-      return [
-        mapToExpenseType(
-          {
-            name: extractedData.merchant || "Unknown purchase",
-            price: extractedData.total || 0,
-          },
-          extractedData.date,
-          extractedData.merchant,
-        ),
-      ];
-    }
-
-    // Map each item to an expense object
-    return extractedData.items.map((item: ExtractedReceiptItem) =>
-      mapToExpenseType(item, extractedData.date, extractedData.merchant),
-    );
-  } catch (error) {
-    console.error("Error analyzing receipt:", error);
-    throw error;
+  options: AnalyzeReceiptOptions = {},
+): Promise<Partial<ExpenseType>> {
+  if (!API_KEY) {
+    throw new Error("Missing Gemini API key");
   }
+
+  if (!imageData || !imageData.includes("base64")) {
+    throw new Error("Invalid image data");
+  }
+
+  const base64Data = imageData.split(",")[1] || imageData;
+  const resolvedMime = resolveMimeType(imageData, mimeType);
+
+  const knownTagsList = (options.knownTags ?? [])
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 50);
+
+  const knownTagsBlock = knownTagsList.length
+    ? `\n\nThe user has previously used these tags: ${knownTagsList.join(", ")}. Prefer reusing these tags when they apply. You may also add up to 2 new tags if clearly warranted.`
+    : "\n\nThe user has no prior tags yet. Suggest up to 3 concise tags based on the receipt.";
+
+  const prompt = `Analyze this receipt image and extract its contents.
+
+Return ONLY a JSON object (no prose, no markdown, no code fences) in this exact shape:
+{
+  "merchant": "store name",
+  "date": "YYYY-MM-DD",
+  "items": [
+    { "name": "item name", "price": 0.00, "quantity": 1, "category": "food" }
+  ],
+  "total": 0.00,
+  "location": "street address or city if printed on the receipt, otherwise empty string",
+  "tags": ["tag1", "tag2"]
 }
 
-/**
- * Maps extracted item data to ExpenseType
- */
-function mapToExpenseType(
-  item: ExtractedReceiptItem,
-  dateStr?: string,
-  merchant?: string,
-): Partial<ExpenseType> {
-  // Find the closest matching category in our system
-  const extractedCategory = item.category?.toLowerCase() || "";
-  let matchedCategory: ExpenseCategory = "other";
+Rules:
+- "total" MUST be a number (not a string, not null). Use the printed receipt total. If you truly cannot find it, set it to the sum of item prices.
+- "price" and "total" are numbers with up to 2 decimal places. Do not include currency symbols.
+- "quantity" is an integer, default 1 if not shown.
+- If no line items are visible, return items: [] but still provide total and merchant.
+- category should be one of: food, entertainment, transport, shopping, utilities, health, travel, other.
+- "location" should only be populated if the receipt clearly shows an address or city. Otherwise use an empty string.
+- "tags" should contain 1-5 short lowercase tags (single words or short phrases, each ≤ 30 chars).${knownTagsBlock}`;
 
-  if (extractedCategory) {
-    // Find a matching category or default to "other"
-    const categoryMatch = EXPENSE_CATEGORIES.find(
-      (cat) =>
-        extractedCategory.includes(cat.value) ||
-        cat.value.includes(extractedCategory) ||
-        extractedCategory.includes(cat.label.toLowerCase()) ||
-        cat.label.toLowerCase().includes(extractedCategory),
-    );
+  const requestBody = {
+    contents: [
+      {
+        parts: [
+          { text: prompt },
+          {
+            inline_data: {
+              mime_type: resolvedMime,
+              data: base64Data,
+            },
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 2048,
+      responseMimeType: "application/json",
+    },
+  };
 
-    if (categoryMatch) {
-      matchedCategory = categoryMatch.value as ExpenseCategory;
-    }
+  const response = await fetch(`${API_URL}?key=${API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Gemini API error (${response.status}):`, errorText);
+    throw new Error(`Receipt analysis failed (${response.status})`);
   }
 
-  // For food items, use the food category
-  if (matchedCategory === "other" && item.name) {
-    const itemName = item.name.toLowerCase();
-    if (
-      itemName.includes("food") ||
-      itemName.includes("meal") ||
-      itemName.includes("snack") ||
-      itemName.includes("drink") ||
-      itemName.includes("cup") ||
-      itemName.includes("pack")
-    ) {
-      matchedCategory = "food";
-    }
+  const result = await response.json();
+  const textContent: string | undefined = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!textContent) {
+    console.error("Invalid Gemini response structure:", result);
+    throw new Error(UNREADABLE_RECEIPT_ERROR);
+  }
+
+  const extractedData = parseReceiptJson(textContent);
+  if (!extractedData) {
+    console.error("Receipt JSON parse failed. Raw text:", textContent);
+    throw new Error(UNREADABLE_RECEIPT_ERROR);
+  }
+
+  const items = Array.isArray(extractedData.items) ? extractedData.items : [];
+
+  const totalFromGemini = toNumber(extractedData.total);
+  const summed = items.reduce((acc, item) => {
+    const price = toNumber(item.price);
+    const qty = item.quantity && item.quantity > 0 ? item.quantity : 1;
+    return Number.isFinite(price) ? acc + price * qty : acc;
+  }, 0);
+
+  const amount = Number.isFinite(totalFromGemini) && totalFromGemini > 0 ? totalFromGemini : summed;
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error(UNREADABLE_RECEIPT_ERROR);
+  }
+
+  const parsedDate = extractedData.date ? new Date(extractedData.date) : null;
+  const date = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate : new Date();
+
+  const location = typeof extractedData.location === "string" ? extractedData.location.trim() : "";
+
+  const normalizedKnown = new Map<string, string>();
+  for (const t of options.knownTags ?? []) {
+    const trimmed = t.trim();
+    if (trimmed) normalizedKnown.set(trimmed.toLowerCase(), trimmed);
+  }
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const raw of extractedData.tags ?? []) {
+    if (typeof raw !== "string") continue;
+    const trimmed = raw.trim().toLowerCase().slice(0, 30);
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    tags.push(normalizedKnown.get(trimmed) ?? trimmed);
+    if (tags.length >= 5) break;
   }
 
   return {
-    amount: typeof item.price === "string" ? parseFloat(item.price) : item.price,
-    date: dateStr ? new Date(dateStr) : new Date(),
-    description: `${item.name}${merchant ? ` (${merchant})` : ""}`,
-    category: matchedCategory,
+    amount,
+    date,
+    description: buildDescription(extractedData.merchant, items),
+    category: mostCommonCategory(items),
+    location,
+    tags,
   };
+}
+
+function parseReceiptJson(text: string): ExtractedReceiptData | null {
+  const candidates = [
+    text,
+    text.match(/```json\s*([\s\S]*?)\s*```/)?.[1],
+    text.match(/```\s*([\s\S]*?)\s*```/)?.[1],
+    text.match(/{[\s\S]*}/)?.[0],
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object") {
+        return parsed as ExtractedReceiptData;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
 }
 
 /**
@@ -262,5 +301,3 @@ export function fileToBase64(file: File): Promise<string> {
     reader.onerror = (error) => reject(error);
   });
 }
-
-// Remove unused parseReceipt function
