@@ -14,10 +14,17 @@ interface ExtractedReceiptData {
   merchant?: string;
   date?: string;
   items: ExtractedReceiptItem[];
+  subtotal?: number | string;
+  discount?: number | string;
+  fees?: number | string;
   total?: number;
   location?: string;
   tags?: string[];
 }
+
+const MAX_DESCRIPTION_LENGTH = 480;
+const MAX_PAST_DAYS = 365;
+const MAX_FUTURE_DAYS = 7;
 
 export interface AnalyzeReceiptOptions {
   knownTags?: string[];
@@ -119,14 +126,49 @@ function formatMoney(value: number): string {
 
 function buildDescription(merchant: string | undefined, items: ExtractedReceiptItem[]): string {
   const header = merchant?.trim() || "Receipt";
-  if (items.length === 0) return header;
+  if (items.length === 0) return header.slice(0, MAX_DESCRIPTION_LENGTH);
+
   const lines = items.map((item) => {
     const qty = item.quantity && item.quantity > 1 ? `${item.quantity}x ` : "";
     const price = toNumber(item.price);
     const priceStr = Number.isFinite(price) && price > 0 ? ` — ${formatMoney(price)}` : "";
     return `- ${qty}${item.name}${priceStr}`;
   });
-  return `${header}\n${lines.join("\n")}`;
+
+  const full = `${header}\n${lines.join("\n")}`;
+  if (full.length <= MAX_DESCRIPTION_LENGTH) return full;
+
+  // Trim items from the end until it fits, leaving room for a "+ N more" suffix.
+  const kept: string[] = [];
+  let used = header.length;
+  for (let i = 0; i < lines.length; i++) {
+    const suffix = `\n+ ${items.length - i} more`;
+    const candidate = used + 1 + lines[i].length + suffix.length;
+    if (candidate > MAX_DESCRIPTION_LENGTH) {
+      const remaining = items.length - i;
+      if (remaining > 0) {
+        return `${header}\n${kept.join("\n")}\n+ ${remaining} more`.slice(
+          0,
+          MAX_DESCRIPTION_LENGTH,
+        );
+      }
+      break;
+    }
+    kept.push(lines[i]);
+    used += 1 + lines[i].length;
+  }
+  return `${header}\n${kept.join("\n")}`.slice(0, MAX_DESCRIPTION_LENGTH);
+}
+
+function clampDate(parsed: Date | null): Date {
+  if (!parsed || isNaN(parsed.getTime())) return new Date();
+  const now = Date.now();
+  const diffDays = (parsed.getTime() - now) / (1000 * 60 * 60 * 24);
+  if (diffDays > MAX_FUTURE_DAYS || diffDays < -MAX_PAST_DAYS) {
+    console.warn("Receipt date outside expected range, falling back to today:", parsed);
+    return new Date();
+  }
+  return parsed;
 }
 
 /**
@@ -183,17 +225,25 @@ Return ONLY a JSON object (no prose, no markdown, no code fences) in this exact 
   "items": [
     { "name": "item name", "price": 0.00, "quantity": 1, "category": "food" }
   ],
+  "subtotal": 0.00,
+  "discount": 0.00,
+  "fees": 0.00,
   "total": 0.00,
   "location": "street address or city if printed on the receipt, otherwise empty string",
   "tags": ["tag1", "tag2"]
 }
 
 Rules:
-- "total" MUST be a number (not a string, not null). Use the printed receipt total. If you truly cannot find it, set it to the sum of item prices.
-- "price" and "total" are numbers with up to 2 decimal places. Do not include currency symbols.
+- "total" MUST be a number representing the FINAL amount the customer paid. This is the grand total AFTER subtracting all discounts, vouchers, coupons, promo codes, loyalty rewards, and credits, AND adding any taxes, tips, fees, delivery charges, or service charges. Use the printed grand total when available.
+- "discount" is the sum of all reductions (voucher, coupon, promo, loyalty, etc.) as a positive number. Use 0 if none.
+- "fees" is the sum of all additions (tax, tip, delivery, service charge, etc.) as a positive number. Use 0 if none.
+- "subtotal" is the pre-discount, pre-fee sum of items. Use 0 if not printed.
+- If the printed total is missing, compute it as: subtotal - discount + fees (or sum(items) - discount + fees).
+- "price" and all money fields are numbers with up to 2 decimal places. No currency symbols.
 - "quantity" is an integer, default 1 if not shown.
 - If no line items are visible, return items: [] but still provide total and merchant.
 - category should be one of: food, entertainment, transport, shopping, utilities, health, travel, other.
+- "date" must be the printed PURCHASE / ORDER / TRANSACTION date in YYYY-MM-DD. Do NOT use phone clock, status bar time, expiry dates, "best before" dates, order IDs, or any number that is not clearly a transaction date. If no purchase date is clearly printed, return an empty string.
 - "location" should only be populated if the receipt clearly shows an address or city. Otherwise use an empty string.
 - "tags" should contain 1-5 short lowercase tags (single words or short phrases, each ≤ 30 chars).${knownTagsBlock}`;
 
@@ -205,8 +255,9 @@ Rules:
     ],
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 8192,
       responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: 0 },
     },
   };
 
@@ -223,36 +274,65 @@ Rules:
   }
 
   const result = await response.json();
-  const textContent: string | undefined = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const candidate = result?.candidates?.[0];
+  const finishReason: string | undefined = candidate?.finishReason;
+  const textContent: string | undefined = candidate?.content?.parts?.[0]?.text;
 
   if (!textContent) {
-    console.error("Invalid Gemini response structure:", result);
+    console.error("Invalid Gemini response structure:", {
+      finishReason,
+      promptFeedback: result?.promptFeedback,
+      result,
+    });
+    if (finishReason === "MAX_TOKENS") {
+      throw new Error("Receipt is too long — try fewer or smaller images.");
+    }
+    if (finishReason === "SAFETY" || finishReason === "RECITATION") {
+      throw new Error("Receipt was blocked by content filters. Try a different image.");
+    }
     throw new Error(UNREADABLE_RECEIPT_ERROR);
   }
 
   const extractedData = parseReceiptJson(textContent);
   if (!extractedData) {
-    console.error("Receipt JSON parse failed. Raw text:", textContent);
+    console.error("Receipt JSON parse failed.", { finishReason, rawText: textContent });
+    if (finishReason === "MAX_TOKENS") {
+      throw new Error("Receipt is too long — try fewer or smaller images.");
+    }
     throw new Error(UNREADABLE_RECEIPT_ERROR);
   }
 
   const items = Array.isArray(extractedData.items) ? extractedData.items : [];
 
   const totalFromGemini = toNumber(extractedData.total);
+  const discount = Math.max(0, toNumber(extractedData.discount) || 0);
+  const fees = Math.max(0, toNumber(extractedData.fees) || 0);
   const summed = items.reduce((acc, item) => {
     const price = toNumber(item.price);
     const qty = item.quantity && item.quantity > 0 ? item.quantity : 1;
     return Number.isFinite(price) ? acc + price * qty : acc;
   }, 0);
 
-  const amount = Number.isFinite(totalFromGemini) && totalFromGemini > 0 ? totalFromGemini : summed;
+  // Prefer Gemini's printed total when it already accounts for discount/fees; otherwise
+  // derive it from items (sum - discount + fees). Sanity-check by reconciling against the
+  // computed value — if Gemini's total ignores a voucher we extracted, fall back to the
+  // adjusted value.
+  const computed = summed - discount + fees;
+  let amount: number;
+  if (Number.isFinite(totalFromGemini) && totalFromGemini > 0) {
+    const offBy = Math.abs(totalFromGemini - computed);
+    const ignoresDiscount = discount > 0 && Math.abs(totalFromGemini - (computed + discount)) < 0.5;
+    amount = ignoresDiscount && offBy > 0.5 ? computed : totalFromGemini;
+  } else {
+    amount = computed > 0 ? computed : summed;
+  }
 
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error(UNREADABLE_RECEIPT_ERROR);
   }
 
   const parsedDate = extractedData.date ? new Date(extractedData.date) : null;
-  const date = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate : new Date();
+  const date = clampDate(parsedDate);
 
   const location = typeof extractedData.location === "string" ? extractedData.location.trim() : "";
 
