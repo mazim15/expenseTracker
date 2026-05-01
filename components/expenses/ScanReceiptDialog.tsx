@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, Camera, Smartphone, X, ImageIcon, AlertCircle } from "lucide-react";
+import { Loader2, Upload, Camera, Smartphone, X, ImageIcon, AlertCircle, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { createScanSession, deleteScanSession, subscribeToScanSession } from "@/lib/scanHandoff";
@@ -18,10 +18,17 @@ import QrHandoffView from "./QrHandoffView";
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGES = 8;
 
-export type ScanReceiptResult = {
+export type ScanReceiptImage = {
   dataUrl: string;
   mimeType: string;
+  name: string;
+  size: number;
+};
+
+export type ScanReceiptResult = {
+  images: { dataUrl: string; mimeType: string }[];
 };
 
 type ScanReceiptDialogProps = {
@@ -52,16 +59,6 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function dataUrlToBlob(dataUrl: string): Blob {
-  const [header, base64] = dataUrl.split(",");
-  const mimeMatch = header.match(/data:([^;]+);/);
-  const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
-}
-
 export default function ScanReceiptDialog({
   open,
   onOpenChange,
@@ -70,8 +67,7 @@ export default function ScanReceiptDialog({
 }: ScanReceiptDialogProps) {
   const { user } = useAuth();
   const [mode, setMode] = useState<Mode>("pick");
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [images, setImages] = useState<ScanReceiptImage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
@@ -82,8 +78,7 @@ export default function ScanReceiptDialog({
 
   const reset = useCallback(() => {
     setMode("pick");
-    setFile(null);
-    setPreview(null);
+    setImages([]);
     setError(null);
     setIsDragging(false);
   }, []);
@@ -107,6 +102,47 @@ export default function ScanReceiptDialog({
     }
   }, [open, qrSessionId, reset]);
 
+  const handleFiles = useCallback(
+    async (incoming: FileList | File[] | null | undefined) => {
+      if (!incoming) return;
+      const list = Array.from(incoming);
+      if (list.length === 0) return;
+
+      const accepted: ScanReceiptImage[] = [];
+      let firstError: string | null = null;
+
+      for (const file of list) {
+        if (images.length + accepted.length >= MAX_IMAGES) {
+          firstError = `You can only attach up to ${MAX_IMAGES} images per receipt.`;
+          break;
+        }
+        const msg = validateFile(file);
+        if (msg) {
+          firstError = firstError ?? msg;
+          continue;
+        }
+        try {
+          const dataUrl = await readAsDataUrl(file);
+          accepted.push({
+            dataUrl,
+            mimeType: file.type,
+            name: file.name,
+            size: file.size,
+          });
+        } catch (err) {
+          firstError = firstError ?? (err instanceof Error ? err.message : "Could not read file");
+        }
+      }
+
+      if (accepted.length > 0) {
+        setImages((prev) => [...prev, ...accepted]);
+        setMode("preview");
+      }
+      setError(firstError);
+    },
+    [images.length],
+  );
+
   useEffect(() => {
     if (!qrSessionId) return;
     const unsubscribe = subscribeToScanSession(
@@ -116,21 +152,21 @@ export default function ScanReceiptDialog({
         if (data.status === "received" && data.imageData) {
           const dataUrl = data.imageData;
           const mime = data.mimeType || "image/jpeg";
-          try {
-            const blob = dataUrlToBlob(dataUrl);
-            const synthetic = new File([blob], "receipt-from-phone.jpg", { type: mime });
-            setFile(synthetic);
-            setPreview(dataUrl);
-            setMode("preview");
-            setError(null);
-          } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to load photo from phone");
-          } finally {
-            await deleteScanSession(qrSessionId);
-            setQrSessionId(null);
-            setQrUrl(null);
-            setQrExpiresAt(null);
-          }
+          setImages((prev) => [
+            ...prev,
+            {
+              dataUrl,
+              mimeType: mime,
+              name: "receipt-from-phone.jpg",
+              size: Math.round((dataUrl.length * 3) / 4),
+            },
+          ]);
+          setMode("preview");
+          setError(null);
+          await deleteScanSession(qrSessionId);
+          setQrSessionId(null);
+          setQrUrl(null);
+          setQrExpiresAt(null);
         }
       },
       (err) => {
@@ -139,26 +175,6 @@ export default function ScanReceiptDialog({
     );
     return unsubscribe;
   }, [qrSessionId]);
-
-  const handleFile = useCallback(async (chosen: File | null | undefined) => {
-    if (!chosen) return;
-    const msg = validateFile(chosen);
-    if (msg) {
-      setError(msg);
-      setFile(null);
-      setPreview(null);
-      return;
-    }
-    setError(null);
-    setFile(chosen);
-    try {
-      const url = await readAsDataUrl(chosen);
-      setPreview(url);
-      setMode("preview");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not read file");
-    }
-  }, []);
 
   const handleUsePhone = async () => {
     if (!user) {
@@ -182,7 +198,7 @@ export default function ScanReceiptDialog({
 
   const handleQrBack = async () => {
     await cancelSession();
-    setMode("pick");
+    setMode(images.length > 0 ? "preview" : "pick");
   };
 
   const onDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
@@ -207,20 +223,25 @@ export default function ScanReceiptDialog({
     e.stopPropagation();
     setIsDragging(false);
     if (isAnalyzing) return;
-    const dropped = e.dataTransfer.files?.[0];
-    handleFile(dropped);
+    handleFiles(e.dataTransfer.files);
   };
 
   const handleAnalyzeClick = async () => {
-    if (!file || !preview) return;
-    await onAnalyze({ dataUrl: preview, mimeType: file.type });
+    if (images.length === 0) return;
+    await onAnalyze({
+      images: images.map(({ dataUrl, mimeType }) => ({ dataUrl, mimeType })),
+    });
   };
 
-  const removePreview = () => {
-    setFile(null);
-    setPreview(null);
-    setMode("pick");
+  const removeImage = (index: number) => {
+    setImages((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length === 0) setMode("pick");
+      return next;
+    });
   };
+
+  const canAddMore = images.length < MAX_IMAGES && !isAnalyzing;
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!isAnalyzing ? onOpenChange(next) : null)}>
@@ -228,7 +249,8 @@ export default function ScanReceiptDialog({
         <DialogHeader>
           <DialogTitle>Scan receipt</DialogTitle>
           <DialogDescription>
-            Upload a photo of a receipt and we&apos;ll extract the line items for review.
+            Upload one or more photos of a receipt. If your receipt is long, take overlapping shots
+            and we&apos;ll combine them into a single expense.
           </DialogDescription>
         </DialogHeader>
 
@@ -248,9 +270,9 @@ export default function ScanReceiptDialog({
             <div className="bg-muted mb-3 rounded-full p-3">
               <ImageIcon className="text-muted-foreground h-5 w-5" />
             </div>
-            <p className="text-sm font-medium">Drag and drop a receipt image</p>
+            <p className="text-sm font-medium">Drag and drop receipt images</p>
             <p className="text-muted-foreground mt-1 text-xs">
-              JPEG, PNG, WebP, or HEIC · up to 10MB
+              JPEG, PNG, WebP, or HEIC · up to 10MB each · {MAX_IMAGES} max
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               <Button
@@ -261,7 +283,7 @@ export default function ScanReceiptDialog({
                 disabled={isAnalyzing}
               >
                 <Upload className="h-4 w-4" />
-                Choose file
+                Choose files
               </Button>
               <Button
                 type="button"
@@ -284,21 +306,6 @@ export default function ScanReceiptDialog({
                 Use phone
               </Button>
             </div>
-            <input
-              ref={inputRef}
-              type="file"
-              accept={ACCEPTED_TYPES.join(",")}
-              className="hidden"
-              onChange={(e) => handleFile(e.target.files?.[0])}
-            />
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => handleFile(e.target.files?.[0])}
-            />
           </div>
         )}
 
@@ -306,35 +313,92 @@ export default function ScanReceiptDialog({
           <QrHandoffView url={qrUrl} expiresAt={qrExpiresAt} onBack={handleQrBack} />
         )}
 
-        {mode === "preview" && preview && (
+        {mode === "preview" && images.length > 0 && (
           <div className="space-y-3">
-            <div className="bg-muted relative overflow-hidden rounded-lg border">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={preview}
-                alt="Receipt preview"
-                className="max-h-[360px] w-full object-contain"
-              />
-              {!isAnalyzing && (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {images.map((img, index) => (
+                <div
+                  key={`${img.name}-${index}`}
+                  className="bg-muted relative overflow-hidden rounded-md border"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img.dataUrl}
+                    alt={`Receipt ${index + 1}`}
+                    className="h-32 w-full object-cover"
+                  />
+                  {!isAnalyzing && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className="absolute top-1 right-1 h-6 w-6"
+                      onClick={() => removeImage(index)}
+                      aria-label={`Remove image ${index + 1}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                  <div className="bg-background/80 text-muted-foreground absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px]">
+                    {index + 1}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-muted-foreground flex items-center justify-between text-xs">
+              <span>
+                {images.length} image{images.length === 1 ? "" : "s"} ·{" "}
+                {(images.reduce((acc, i) => acc + i.size, 0) / 1024).toFixed(0)} KB total
+              </span>
+              <div className="flex gap-1">
                 <Button
                   type="button"
-                  variant="secondary"
-                  size="icon"
-                  className="absolute top-2 right-2 h-8 w-8"
-                  onClick={removePreview}
-                  aria-label="Remove image"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => inputRef.current?.click()}
+                  disabled={!canAddMore}
                 >
-                  <X className="h-4 w-4" />
+                  <Plus className="h-4 w-4" />
+                  Add files
                 </Button>
-              )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={!canAddMore}
+                >
+                  <Camera className="h-4 w-4" />
+                  Add photo
+                </Button>
+              </div>
             </div>
-            {file && (
-              <p className="text-muted-foreground truncate text-xs">
-                {file.name} · {(file.size / 1024).toFixed(0)} KB
-              </p>
-            )}
           </div>
         )}
+
+        <input
+          ref={inputRef}
+          type="file"
+          accept={ACCEPTED_TYPES.join(",")}
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
 
         {error && (
           <div className="border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
@@ -349,7 +413,7 @@ export default function ScanReceiptDialog({
           </Button>
           <Button
             onClick={handleAnalyzeClick}
-            disabled={mode !== "preview" || !file || isAnalyzing}
+            disabled={mode !== "preview" || images.length === 0 || isAnalyzing}
           >
             {isAnalyzing ? (
               <>

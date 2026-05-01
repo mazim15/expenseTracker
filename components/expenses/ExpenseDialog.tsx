@@ -87,7 +87,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
   const [localCategories, setLocalCategories] = useState(EXPENSE_CATEGORIES);
-  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [receiptImages, setReceiptImages] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [tagInput, setTagInput] = useState("");
 
@@ -99,7 +99,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
   useEffect(() => {
     if (open) {
       form.reset(defaultValues(expense));
-      setReceiptImage(null);
+      setReceiptImages([]);
       setTagInput("");
     }
   }, [open, expense, form]);
@@ -165,13 +165,17 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
     );
   };
 
-  const handleScanAnalyze = async ({ dataUrl, mimeType }: ScanReceiptResult) => {
+  const handleScanAnalyze = async ({ images }: ScanReceiptResult) => {
+    const mimeTypes = images.map((i) => i.mimeType).join(",");
     try {
-      await logAction("receipt_analysis_started", { mimeType });
-      setReceiptImage(dataUrl);
+      await logAction("receipt_analysis_started", {
+        imageCount: images.length,
+        mimeTypes,
+      });
+      setReceiptImages(images.map((i) => i.dataUrl));
       setIsAnalyzing(true);
       toast.loading("Analyzing receipt...");
-      const extracted = await analyzeReceipt(dataUrl, mimeType, { knownTags });
+      const extracted = await analyzeReceipt(images, { knownTags });
       if (extracted.amount) form.setValue("amount", extracted.amount);
       if (extracted.date) form.setValue("date", format(extracted.date, "yyyy-MM-dd"));
       if (extracted.category) form.setValue("category", extracted.category);
@@ -199,8 +203,11 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
     } catch (err) {
       toast.dismiss();
       toast.error(err instanceof Error ? err.message : "Failed to analyze receipt");
-      await logError(err as Error, "receipt_analysis_failed", { mimeType });
-      setReceiptImage(null);
+      await logError(err as Error, "receipt_analysis_failed", {
+        imageCount: images.length,
+        mimeTypes,
+      });
+      setReceiptImages([]);
     } finally {
       setIsAnalyzing(false);
     }
@@ -464,21 +471,26 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
 
               <div className="rounded-md border border-dashed p-3">
                 <span className="mb-2 block text-xs font-medium">Receipt (optional)</span>
-                {receiptImage ? (
-                  <div className="relative">
-                    <Image
-                      src={receiptImage}
-                      alt="Receipt"
-                      className="mx-auto max-h-24 rounded object-contain"
-                      width={200}
-                      height={100}
-                    />
+                {receiptImages.length > 0 ? (
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap justify-center gap-1">
+                      {receiptImages.map((src, idx) => (
+                        <Image
+                          key={idx}
+                          src={src}
+                          alt={`Receipt ${idx + 1}`}
+                          className="max-h-24 rounded object-contain"
+                          width={120}
+                          height={96}
+                        />
+                      ))}
+                    </div>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="mt-1 h-7 w-full text-xs"
-                      onClick={() => setReceiptImage(null)}
+                      onClick={() => setReceiptImages([])}
                       disabled={isAnalyzing}
                     >
                       Remove

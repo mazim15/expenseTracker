@@ -105,7 +105,7 @@ export default function ExpensesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const [scannedReceipt, setScannedReceipt] = useState<string | null>(null);
+  const [scannedReceipts, setScannedReceipts] = useState<string[] | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detectedExpenses, setDetectedExpenses] = useState<Partial<ExpenseType>[]>([]);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
@@ -335,13 +335,13 @@ export default function ExpensesPage() {
     if (filteredExpenses.length > 0) exportExpensesToCSV(filteredExpenses);
   };
 
-  const handleScanAnalyze = async ({ dataUrl, mimeType }: ScanReceiptResult) => {
+  const handleScanAnalyze = async ({ images }: ScanReceiptResult) => {
     try {
       setIsAnalyzing(true);
-      setScannedReceipt(dataUrl);
+      setScannedReceipts(images.map((img) => img.dataUrl));
       toast.loading("Analyzing receipt...");
 
-      const extracted = await analyzeReceipt(dataUrl, mimeType, { knownTags });
+      const extracted = await analyzeReceipt(images, { knownTags });
 
       const expenseWithUser = { ...extracted, userId: user?.uid || "" };
       setDetectedExpenses([expenseWithUser]);
@@ -379,7 +379,7 @@ export default function ExpensesPage() {
       }
       await refetch();
       setIsReviewDialogOpen(false);
-      setScannedReceipt(null);
+      setScannedReceipts(null);
       setDetectedExpenses([]);
       toast.dismiss();
       showSuccessMessage(`${expensesIn.length} expenses added successfully`);
@@ -700,11 +700,11 @@ export default function ExpensesPage() {
         open={isReviewDialogOpen}
         onOpenChange={setIsReviewDialogOpen}
         expenses={detectedExpenses}
-        receiptImage={scannedReceipt}
+        receiptImages={scannedReceipts}
         onSave={handleSaveMultipleExpenses}
         onCancel={() => {
           setIsReviewDialogOpen(false);
-          setScannedReceipt(null);
+          setScannedReceipts(null);
           setDetectedExpenses([]);
         }}
       />

@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { use } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, CheckCircle2, Loader2, AlertCircle, RotateCcw } from "lucide-react";
+import { Camera, CheckCircle2, Loader2, AlertCircle, RotateCcw, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { compressImageForSession, submitImageToSession } from "@/lib/scanHandoff";
 
@@ -14,7 +14,8 @@ export default function PhoneScanPage({ params }: { params: Promise<{ sid: strin
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(
     async (file: File | undefined | null) => {
@@ -48,7 +49,8 @@ export default function PhoneScanPage({ params }: { params: Promise<{ sid: strin
     setStatus("idle");
     setError(null);
     setPreview(null);
-    if (inputRef.current) inputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (libraryInputRef.current) libraryInputRef.current.value = "";
   };
 
   const busy = status === "compressing" || status === "sending";
@@ -90,30 +92,50 @@ export default function PhoneScanPage({ params }: { params: Promise<{ sid: strin
           </div>
         ) : (
           <>
-            <Button
-              type="button"
-              size="lg"
-              className="h-14 w-full text-base"
-              onClick={() => inputRef.current?.click()}
-              disabled={busy}
-            >
-              {busy ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  {status === "compressing" ? "Processing…" : "Sending…"}
-                </>
-              ) : (
-                <>
-                  <Camera className="h-5 w-5" />
-                  Take photo
-                </>
-              )}
-            </Button>
+            <div className="space-y-2">
+              <Button
+                type="button"
+                size="lg"
+                className="h-14 w-full text-base"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={busy}
+              >
+                {busy ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    {status === "compressing" ? "Processing…" : "Sending…"}
+                  </>
+                ) : (
+                  <>
+                    <Camera className="h-5 w-5" />
+                    Take photo
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="h-12 w-full text-sm"
+                onClick={() => libraryInputRef.current?.click()}
+                disabled={busy}
+              >
+                <ImageIcon className="h-5 w-5" />
+                Choose from library
+              </Button>
+            </div>
             <input
-              ref={inputRef}
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
+              className="hidden"
+              onChange={(e) => handleFile(e.target.files?.[0])}
+            />
+            <input
+              ref={libraryInputRef}
+              type="file"
+              accept="image/*"
               className="hidden"
               onChange={(e) => handleFile(e.target.files?.[0])}
             />

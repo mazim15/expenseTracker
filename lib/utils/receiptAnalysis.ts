@@ -23,6 +23,11 @@ export interface AnalyzeReceiptOptions {
   knownTags?: string[];
 }
 
+export interface ReceiptImageInput {
+  dataUrl: string;
+  mimeType?: string;
+}
+
 interface ExtractedReceiptItem {
   name: string;
   price: number | string;
@@ -125,24 +130,35 @@ function buildDescription(merchant: string | undefined, items: ExtractedReceiptI
 }
 
 /**
- * Analyzes a receipt image using Gemini and returns a single aggregated expense.
+ * Analyzes one or more images of a single receipt using Gemini and returns one aggregated expense.
+ * When multiple images are passed, they are treated as different parts/pages of the SAME receipt
+ * (e.g. a long receipt photographed in sections) and combined into one result.
  * Throws if the receipt can't be parsed into a usable expense.
  */
 export async function analyzeReceipt(
-  imageData: string,
-  mimeType?: string,
+  images: ReceiptImageInput[],
   options: AnalyzeReceiptOptions = {},
 ): Promise<Partial<ExpenseType>> {
   if (!API_KEY) {
     throw new Error("Missing Gemini API key");
   }
 
-  if (!imageData || !imageData.includes("base64")) {
-    throw new Error("Invalid image data");
+  if (!Array.isArray(images) || images.length === 0) {
+    throw new Error("No receipt images provided");
   }
 
-  const base64Data = imageData.split(",")[1] || imageData;
-  const resolvedMime = resolveMimeType(imageData, mimeType);
+  const imageParts = images.map((img) => {
+    if (!img?.dataUrl || !img.dataUrl.includes("base64")) {
+      throw new Error("Invalid image data");
+    }
+    const base64Data = img.dataUrl.split(",")[1] || img.dataUrl;
+    return {
+      inline_data: {
+        mime_type: resolveMimeType(img.dataUrl, img.mimeType),
+        data: base64Data,
+      },
+    };
+  });
 
   const knownTagsList = (options.knownTags ?? [])
     .map((t) => t.trim())
@@ -153,7 +169,12 @@ export async function analyzeReceipt(
     ? `\n\nThe user has previously used these tags: ${knownTagsList.join(", ")}. Prefer reusing these tags when they apply. You may also add up to 2 new tags if clearly warranted.`
     : "\n\nThe user has no prior tags yet. Suggest up to 3 concise tags based on the receipt.";
 
-  const prompt = `Analyze this receipt image and extract its contents.
+  const multiImageNote =
+    images.length > 1
+      ? `\n\nIMPORTANT: ${images.length} images are provided. They are different parts of the SAME receipt (e.g. a long receipt photographed in sections, front/back, or overlapping segments). Combine all visible line items into a single result and avoid double-counting items that appear in overlapping regions across images. The total should reflect the receipt as a whole.`
+      : "";
+
+  const prompt = `Analyze the receipt image(s) and extract the receipt's contents.${multiImageNote}
 
 Return ONLY a JSON object (no prose, no markdown, no code fences) in this exact shape:
 {
@@ -179,15 +200,7 @@ Rules:
   const requestBody = {
     contents: [
       {
-        parts: [
-          { text: prompt },
-          {
-            inline_data: {
-              mime_type: resolvedMime,
-              data: base64Data,
-            },
-          },
-        ],
+        parts: [{ text: prompt }, ...imageParts],
       },
     ],
     generationConfig: {

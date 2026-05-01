@@ -29,7 +29,7 @@ type ReceiptReviewDialogProps = {
   expenses: Partial<ExpenseType>[];
   onSave: (expenses: Partial<ExpenseType>[]) => void;
   onCancel: () => void;
-  receiptImage?: string | null;
+  receiptImages?: string[] | null;
 };
 
 export default function ReceiptReviewDialog({
@@ -38,7 +38,7 @@ export default function ReceiptReviewDialog({
   expenses: initialExpenses,
   onSave,
   onCancel,
-  receiptImage,
+  receiptImages,
 }: ReceiptReviewDialogProps) {
   const [expenses, setExpenses] = useState<Partial<ExpenseType>[]>(initialExpenses);
   const [selectedItems, setSelectedItems] = useState<Record<number, boolean>>(
@@ -93,10 +93,17 @@ export default function ReceiptReviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-5xl overflow-hidden p-0">
         <div className="grid max-h-[85vh] grid-cols-1 md:grid-cols-[minmax(0,320px)_1fr]">
-          {receiptImage ? (
-            <div className="bg-muted hidden max-h-[85vh] overflow-auto border-r md:block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={receiptImage} alt="Scanned receipt" className="w-full object-contain" />
+          {receiptImages && receiptImages.length > 0 ? (
+            <div className="bg-muted hidden max-h-[85vh] space-y-2 overflow-auto border-r p-2 md:block">
+              {receiptImages.map((src, idx) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={idx}
+                  src={src}
+                  alt={`Scanned receipt ${idx + 1}`}
+                  className="w-full rounded object-contain"
+                />
+              ))}
             </div>
           ) : null}
 
