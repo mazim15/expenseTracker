@@ -1,0 +1,498 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  format,
+  isSameMonth,
+  isToday,
+  startOfMonth,
+  subMonths,
+} from "date-fns";
+import { ChevronLeft, ChevronRight, ChevronDown, Wallet, Flame, TrendingUp } from "lucide-react";
+import { useAuth } from "@/lib/auth/AuthContext";
+import { useExpensesQuery } from "@/lib/queries/expenses";
+import { ExpenseType, EXPENSE_CATEGORIES } from "@/types/expense";
+import { formatCurrency, cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { StatCard } from "@/components/ui/stat-card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+// Intensity buckets: level 5 = highest spend day (darkest), level 1 = lightest.
+const LEVEL_ALPHA = [0, 0.16, 0.34, 0.52, 0.72, 0.94];
+
+// Solid accent per category — used for dots and the breakdown bar.
+const CATEGORY_DOT: Record<string, string> = {
+  food: "bg-orange-500",
+  housing: "bg-blue-500",
+  transportation: "bg-green-500",
+  utilities: "bg-purple-500",
+  entertainment: "bg-pink-500",
+  healthcare: "bg-red-500",
+  shopping: "bg-yellow-500",
+  education: "bg-indigo-500",
+  personal: "bg-cyan-500",
+  other: "bg-gray-400",
+};
+
+function dotColor(category: string): string {
+  return CATEGORY_DOT[category] ?? CATEGORY_DOT.other;
+}
+
+function categoryLabel(category: string): string {
+  return EXPENSE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+}
+
+/** Compact number for tiles: 1234 -> 1.2k, 1_250_000 -> 1.3M */
+function compact(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1) + "k";
+  return String(Math.round(n));
+}
+
+type DayData = { total: number; expenses: ExpenseType[]; level: number };
+
+export default function CalendarPage() {
+  const { user } = useAuth();
+  const expensesQuery = useExpensesQuery(user?.uid);
+  const allExpenses = useMemo(() => expensesQuery.data ?? [], [expensesQuery.data]);
+  const loading = expensesQuery.isLoading;
+
+  const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
+
+  const monthStart = startOfMonth(cursor);
+  const monthEnd = endOfMonth(cursor);
+
+  const { days, byDay, monthTotal, monthCount, busiestDay, avgPerActiveDay } = useMemo(() => {
+    const map = new Map<string, DayData>();
+
+    // Bucket every expense that falls inside the visible month.
+    for (const exp of allExpenses) {
+      if (!isSameMonth(exp.date, monthStart)) continue;
+      const key = format(exp.date, "yyyy-MM-dd");
+      const entry = map.get(key) ?? { total: 0, expenses: [], level: 0 };
+      entry.total += exp.amount;
+      entry.expenses.push(exp);
+      map.set(key, entry);
+    }
+
+    const totals = Array.from(map.values()).map((d) => d.total);
+    const max = totals.length ? Math.max(...totals) : 0;
+
+    // Assign a heatmap level relative to the busiest day of the month.
+    for (const entry of map.values()) {
+      entry.level = max > 0 ? Math.min(5, Math.max(1, Math.ceil((entry.total / max) * 5))) : 0;
+      entry.expenses.sort((a, b) => b.amount - a.amount);
+    }
+
+    const gridDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    const total = totals.reduce((s, t) => s + t, 0);
+    const count = Array.from(map.values()).reduce((s, d) => s + d.expenses.length, 0);
+
+    let busiest: { date: string; total: number } | null = null;
+    for (const [key, d] of map) {
+      if (!busiest || d.total > busiest.total) busiest = { date: key, total: d.total };
+    }
+
+    return {
+      days: gridDays,
+      byDay: map,
+      monthTotal: total,
+      monthCount: count,
+      busiestDay: busiest,
+      avgPerActiveDay: map.size ? total / map.size : 0,
+    };
+  }, [allExpenses, monthStart, monthEnd]);
+
+  // Months (across all years) that have any spending — powers the picker dots.
+  const activeMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const exp of allExpenses) set.add(format(exp.date, "yyyy-MM"));
+    return set;
+  }, [allExpenses]);
+
+  const leadingBlanks = monthStart.getDay(); // 0 = Sunday
+
+  return (
+    <div className="container mx-auto max-w-6xl px-4 py-6 lg:px-6 lg:py-8">
+      <div className="mb-6 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Your spending across the month — darker means a heavier day.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setCursor(startOfMonth(new Date()))}>
+            Today
+          </Button>
+          <div className="bg-muted flex items-center rounded-md p-0.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setCursor((c) => subMonths(c, 1))}
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <MonthPicker value={cursor} onChange={setCursor} activeMonths={activeMonths} />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setCursor((c) => addMonths(c, 1))}
+              aria-label="Next month"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <StatCard
+          label="Month total"
+          icon={Wallet}
+          value={<span className="tabular-nums">{formatCurrency(monthTotal)}</span>}
+          hint={<span>{monthCount} expenses</span>}
+        />
+        <StatCard
+          label="Busiest day"
+          icon={Flame}
+          value={
+            busiestDay ? (
+              <span className="tabular-nums">{formatCurrency(busiestDay.total)}</span>
+            ) : (
+              <span className="text-muted-foreground text-base font-normal">—</span>
+            )
+          }
+          hint={
+            <span>
+              {busiestDay ? format(new Date(busiestDay.date), "EEE, MMM d") : "No spending"}
+            </span>
+          }
+        />
+        <StatCard
+          label="Avg / active day"
+          icon={TrendingUp}
+          value={<span className="tabular-nums">{formatCurrency(avgPerActiveDay)}</span>}
+          hint={<span>Days with spending</span>}
+        />
+      </div>
+
+      <Card>
+        <CardContent className="p-3 sm:p-4">
+          {loading ? (
+            <div className="flex justify-center py-24">
+              <div className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+            </div>
+          ) : (
+            <>
+              <div className="mb-2 grid grid-cols-7 gap-1.5 sm:gap-2">
+                {WEEKDAYS.map((d) => (
+                  <div
+                    key={d}
+                    className="text-muted-foreground py-1 text-center text-xs font-medium tracking-wide uppercase"
+                  >
+                    <span className="hidden sm:inline">{d}</span>
+                    <span className="sm:hidden">{d[0]}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                {Array.from({ length: leadingBlanks }).map((_, i) => (
+                  <div
+                    key={`blank-${i}`}
+                    className="aspect-square sm:aspect-auto sm:min-h-[92px]"
+                  />
+                ))}
+
+                {days.map((day) => {
+                  const key = format(day, "yyyy-MM-dd");
+                  const data = byDay.get(key);
+                  const level = data?.level ?? 0;
+                  const today = isToday(day);
+
+                  const tile = (
+                    <div
+                      style={
+                        level > 0
+                          ? {
+                              backgroundColor: `color-mix(in oklab, var(--primary) ${
+                                LEVEL_ALPHA[level] * 100
+                              }%, transparent)`,
+                            }
+                          : undefined
+                      }
+                      className={cn(
+                        "group relative flex aspect-square flex-col rounded-xl border p-2 text-left transition-all sm:aspect-auto sm:min-h-[92px]",
+                        level === 0 && "border-border/60 bg-transparent",
+                        level > 0 &&
+                          "cursor-pointer border-transparent hover:z-10 hover:scale-[1.03] hover:shadow-md",
+                        level >= 4 && "text-primary-foreground",
+                        today && "ring-primary ring-offset-background ring-2 ring-offset-1",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "text-sm font-semibold tabular-nums",
+                          level === 0 && "text-muted-foreground",
+                          today && level === 0 && "text-primary",
+                        )}
+                      >
+                        {format(day, "d")}
+                      </span>
+                      {data && (
+                        <span
+                          className={cn(
+                            "mt-auto text-sm font-semibold tabular-nums sm:text-base",
+                            level < 4 && "text-foreground",
+                          )}
+                        >
+                          {compact(data.total)}
+                        </span>
+                      )}
+                      {data && (
+                        <span
+                          className={cn(
+                            "text-[10px] leading-none tabular-nums",
+                            level >= 4 ? "text-primary-foreground/70" : "text-muted-foreground",
+                          )}
+                        >
+                          {data.expenses.length} item{data.expenses.length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  );
+
+                  if (!data) {
+                    return <div key={key}>{tile}</div>;
+                  }
+
+                  return (
+                    <Popover key={key}>
+                      <PopoverTrigger asChild>
+                        <button type="button" className="block w-full">
+                          {tile}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="center"
+                        sideOffset={8}
+                        className="w-[19rem] overflow-hidden border-0 p-0 shadow-xl"
+                      >
+                        <DayDetail day={day} data={data} />
+                      </PopoverContent>
+                    </Popover>
+                  );
+                })}
+              </div>
+
+              {/* Heatmap legend */}
+              <div className="mt-4 flex items-center justify-end gap-2 pr-1">
+                <span className="text-muted-foreground text-xs">Less</span>
+                {[1, 2, 3, 4, 5].map((lvl) => (
+                  <span
+                    key={lvl}
+                    className="h-3.5 w-3.5 rounded-[4px] border"
+                    style={{
+                      backgroundColor: `color-mix(in oklab, var(--primary) ${
+                        LEVEL_ALPHA[lvl] * 100
+                      }%, transparent)`,
+                      borderColor: "transparent",
+                    }}
+                  />
+                ))}
+                <span className="text-muted-foreground text-xs">More</span>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function MonthPicker({
+  value,
+  onChange,
+  activeMonths,
+}: {
+  value: Date;
+  onChange: (d: Date) => void;
+  activeMonths: Set<string>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [year, setYear] = useState(() => value.getFullYear());
+  const now = new Date();
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) setYear(value.getFullYear());
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="hover:bg-background flex h-7 min-w-[132px] items-center justify-center gap-1 rounded-[5px] px-2 text-sm font-medium tabular-nums transition-colors"
+        >
+          {format(value, "MMMM yyyy")}
+          <ChevronDown className="text-muted-foreground h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="center" sideOffset={8} className="w-64 p-3 shadow-xl">
+        <div className="mb-3 flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => setYear((y) => y - 1)}
+            aria-label="Previous year"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-semibold tabular-nums">{year}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => setYear((y) => y + 1)}
+            aria-label="Next year"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5">
+          {MONTHS_SHORT.map((label, i) => {
+            const selected = value.getFullYear() === year && value.getMonth() === i;
+            const isCurrent = now.getFullYear() === year && now.getMonth() === i;
+            const hasSpending = activeMonths.has(`${year}-${String(i + 1).padStart(2, "0")}`);
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={() => {
+                  onChange(new Date(year, i, 1));
+                  setOpen(false);
+                }}
+                className={cn(
+                  "relative rounded-lg py-2 text-sm font-medium transition-colors",
+                  selected
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "hover:bg-muted text-foreground",
+                  !selected && isCurrent && "ring-primary/40 ring-1",
+                )}
+              >
+                {label}
+                {hasSpending && (
+                  <span
+                    className={cn(
+                      "absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full",
+                      selected ? "bg-primary-foreground" : "bg-primary",
+                    )}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function DayDetail({ day, data }: { day: Date; data: DayData }) {
+  // Group the day's spending by category for the breakdown bar.
+  const segments = useMemo(() => {
+    const byCat = new Map<string, number>();
+    for (const exp of data.expenses) {
+      byCat.set(exp.category, (byCat.get(exp.category) ?? 0) + exp.amount);
+    }
+    return Array.from(byCat.entries())
+      .map(([category, amount]) => ({ category, amount, pct: (amount / data.total) * 100 }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [data]);
+
+  return (
+    <div>
+      {/* Gradient header */}
+      <div className="from-primary to-primary/75 relative overflow-hidden bg-gradient-to-br px-4 pt-3.5 pb-4">
+        <div className="bg-primary-foreground/10 pointer-events-none absolute -top-8 -right-6 h-24 w-24 rounded-full" />
+        <div className="bg-primary-foreground/10 pointer-events-none absolute -right-2 -bottom-10 h-20 w-20 rounded-full" />
+        <div className="text-primary-foreground relative">
+          <p className="text-primary-foreground/80 text-[11px] font-medium tracking-wide uppercase">
+            {format(day, "EEEE")}
+          </p>
+          <p className="text-sm font-semibold">{format(day, "MMMM d, yyyy")}</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
+            {formatCurrency(data.total)}
+          </p>
+          <p className="text-primary-foreground/80 text-xs">
+            {data.expenses.length} expense{data.expenses.length > 1 ? "s" : ""}
+          </p>
+        </div>
+      </div>
+
+      {/* Category breakdown bar */}
+      <div className="px-4 pt-3">
+        <div className="bg-muted flex h-2 overflow-hidden rounded-full">
+          {segments.map((s) => (
+            <div
+              key={s.category}
+              className={cn("h-full", dotColor(s.category))}
+              style={{ width: `${s.pct}%` }}
+              title={`${categoryLabel(s.category)} — ${formatCurrency(s.amount)}`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Expense rows */}
+      <div className="max-h-64 space-y-0.5 overflow-y-auto p-2">
+        {data.expenses.map((exp) => (
+          <div
+            key={exp.id}
+            className="hover:bg-muted flex items-center gap-3 rounded-lg px-2.5 py-2 transition-colors"
+          >
+            <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotColor(exp.category))} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{exp.description}</p>
+              <p className="text-muted-foreground truncate text-xs">
+                {categoryLabel(exp.category)}
+                {exp.location ? ` · ${exp.location}` : ""}
+              </p>
+            </div>
+            <span className="shrink-0 text-sm font-semibold tabular-nums">
+              {formatCurrency(exp.amount)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

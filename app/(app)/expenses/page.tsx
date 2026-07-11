@@ -31,6 +31,7 @@ import {
   X,
   Wallet,
   Target,
+  CheckSquare,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,7 +86,6 @@ export default function ExpensesPage() {
   const deleteMutation = useDeleteExpenseMutation(user?.uid);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalFilteredCount, setTotalFilteredCount] = useState(0);
   const ITEMS_PER_PAGE = 20;
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -98,8 +98,9 @@ export default function ExpensesPage() {
   const [sortBy, setSortBy] = useState("date-desc");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
+  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedExpenses, setSelectedExpenses] = useState<string[]>([]);
-  const [filteredExpenses, setFilteredExpenses] = useState<ExpenseType[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [categories, setCategories] = useState(EXPENSE_CATEGORIES);
 
   const searchParams = useSearchParams();
@@ -174,8 +175,8 @@ export default function ExpensesPage() {
     }
   }, []);
 
-  const filterAndPaginateExpenses = useCallback(() => {
-    if (!Array.isArray(allExpenses)) return;
+  const filteredSorted = useMemo(() => {
+    if (!Array.isArray(allExpenses)) return [];
     let filtered = [...allExpenses];
 
     if (searchTerm) {
@@ -204,11 +205,15 @@ export default function ExpensesPage() {
       filtered = filtered.filter((e) => e.date >= monthStart);
     }
 
-    const sorted = sortExpenses(filtered, sortBy);
+    return sortExpenses(filtered, sortBy);
+  }, [allExpenses, searchTerm, categoryFilter, dateFilter, sortBy, sortExpenses]);
+
+  const totalFilteredCount = filteredSorted.length;
+
+  const filteredExpenses = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    setFilteredExpenses(sorted.slice(startIndex, startIndex + ITEMS_PER_PAGE));
-    setTotalFilteredCount(sorted.length);
-  }, [allExpenses, searchTerm, categoryFilter, dateFilter, sortBy, currentPage, sortExpenses]);
+    return filteredSorted.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredSorted, currentPage]);
 
   const refetch = expensesQuery.refetch;
 
@@ -230,16 +235,45 @@ export default function ExpensesPage() {
       logAction("bulk_delete_expenses", { count, timestamp: new Date().toISOString() });
     } catch (error) {
       handleError(error, "Bulk delete expenses");
+      throw error;
     }
   }, [user, selectedExpenses, deleteMutation, logAction]);
 
+  const handleBulkCategoryChange = useCallback(
+    async (newCategory: string) => {
+      if (!user || selectedExpenses.length === 0) return;
+      try {
+        await Promise.all(
+          selectedExpenses.map((id) =>
+            updateMutation.mutateAsync({
+              id,
+              userId: user.uid,
+              patch: { category: newCategory },
+            }),
+          ),
+        );
+        const count = selectedExpenses.length;
+        setSelectedExpenses([]);
+        showSuccessMessage(`${count} expenses moved to ${newCategory}`);
+        logAction("bulk_update_category", {
+          count,
+          category: newCategory,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        handleError(error, "Bulk update category");
+      }
+    },
+    [user, selectedExpenses, updateMutation, logAction],
+  );
+
   const handleSelectAll = useCallback(() => {
-    if (selectedExpenses.length === filteredExpenses.length) {
+    if (selectedExpenses.length === filteredSorted.length) {
       setSelectedExpenses([]);
     } else {
-      setSelectedExpenses(filteredExpenses.map((e) => e.id));
+      setSelectedExpenses(filteredSorted.map((e) => e.id));
     }
-  }, [selectedExpenses.length, filteredExpenses]);
+  }, [selectedExpenses.length, filteredSorted]);
 
   const toggleExpenseSelection = useCallback((id: string) => {
     setSelectedExpenses((prev) =>
@@ -287,10 +321,6 @@ export default function ExpensesPage() {
   }, [user, fetchCategories]);
 
   useEffect(() => {
-    filterAndPaginateExpenses();
-  }, [filterAndPaginateExpenses]);
-
-  useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, categoryFilter, dateFilter, sortBy]);
 
@@ -332,7 +362,7 @@ export default function ExpensesPage() {
   };
 
   const handleExportCSV = () => {
-    if (filteredExpenses.length > 0) exportExpensesToCSV(filteredExpenses);
+    if (filteredSorted.length > 0) exportExpensesToCSV(filteredSorted);
   };
 
   const handleScanAnalyze = async ({ images }: ScanReceiptResult) => {
@@ -409,7 +439,7 @@ export default function ExpensesPage() {
             variant="outline"
             size="sm"
             onClick={handleExportCSV}
-            disabled={filteredExpenses.length === 0}
+            disabled={totalFilteredCount === 0}
           >
             <Download className="h-4 w-4" />
             Export
@@ -547,10 +577,33 @@ export default function ExpensesPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {selectedExpenses.length > 0 && (
+            <Button
+              variant={selectionMode ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setSelectionMode((prev) => !prev);
+                setSelectedExpenses([]);
+              }}
+            >
+              <CheckSquare className="h-4 w-4" />
+              {selectionMode ? "Done" : "Select"}
+            </Button>
+            {selectionMode && selectedExpenses.length > 0 && (
               <>
                 <Badge variant="secondary">{selectedExpenses.length} selected</Badge>
-                <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
+                <Select onValueChange={handleBulkCategoryChange}>
+                  <SelectTrigger className="h-9 w-[180px]">
+                    <SelectValue placeholder="Change category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c: ExpenseCategoryType) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}>
                   <Trash2 className="h-4 w-4" />
                   Delete
                 </Button>
@@ -588,10 +641,10 @@ export default function ExpensesPage() {
                 : "No expenses found"}
             </CardDescription>
           </div>
-          {filteredExpenses.length > 0 && (
+          {selectionMode && totalFilteredCount > 0 && (
             <label className="text-muted-foreground flex items-center gap-2 text-sm">
               <Checkbox
-                checked={selectedExpenses.length === filteredExpenses.length}
+                checked={selectedExpenses.length === totalFilteredCount}
                 onChange={handleSelectAll}
               />
               Select all
@@ -610,7 +663,7 @@ export default function ExpensesPage() {
                 onEdit={handleEditExpense}
                 onDelete={handleDeleteClick}
                 selectedExpenses={selectedExpenses}
-                onToggleSelection={toggleExpenseSelection}
+                onToggleSelection={selectionMode ? toggleExpenseSelection : undefined}
                 viewMode={viewMode}
               />
               {totalFilteredCount > ITEMS_PER_PAGE && (
@@ -694,6 +747,16 @@ export default function ExpensesPage() {
         onConfirm={handleDeleteConfirm}
         title="Delete expense"
         description="Are you sure? This action cannot be undone."
+      />
+
+      <DeleteConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        onConfirm={handleBulkDelete}
+        title="Delete expenses"
+        description={`Delete ${selectedExpenses.length} selected ${
+          selectedExpenses.length === 1 ? "expense" : "expenses"
+        }? This action cannot be undone.`}
       />
 
       <ReceiptReviewDialog

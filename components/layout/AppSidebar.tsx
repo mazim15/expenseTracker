@@ -16,6 +16,7 @@ import {
   Wallet,
   LayoutDashboard,
   Receipt,
+  CalendarDays,
   BarChart3,
   Activity,
   Settings,
@@ -36,6 +37,7 @@ type NavItem = {
 const mainNav: NavItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Expenses", href: "/expenses", icon: Receipt },
+  { name: "Calendar", href: "/calendar", icon: CalendarDays },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
 ];
 

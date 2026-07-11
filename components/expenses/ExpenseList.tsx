@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import ExpenseDialog from "./ExpenseDialog";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getCategoryLabel } from "@/lib/utils/categoryUtils";
 import { getCategoryColor } from "@/lib/constants/categoryColors";
 
@@ -21,7 +22,14 @@ type ExpenseListProps = {
   viewMode?: "list" | "grid";
 };
 
-export default function ExpenseList({ expenses, onDelete, onEdit }: ExpenseListProps) {
+export default function ExpenseList({
+  expenses,
+  onDelete,
+  onEdit,
+  selectedExpenses = [],
+  onToggleSelection,
+  viewMode = "list",
+}: ExpenseListProps) {
   const [editingExpense, setEditingExpense] = useState<ExpenseType | null>(null);
   const [sortField, setSortField] = useState<"date" | "amount" | "category">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -66,6 +74,63 @@ export default function ExpenseList({ expenses, onDelete, onEdit }: ExpenseListP
     }
   });
 
+  const renderCard = (expense: ExpenseType) => (
+    <Card key={expense.id} className="p-4">
+      <div className="mb-2 flex items-start justify-between gap-3">
+        {onToggleSelection && (
+          <Checkbox
+            checked={selectedExpenses.includes(expense.id)}
+            onChange={() => onToggleSelection(expense.id)}
+            className="mt-1"
+            aria-label={`Select expense: ${expense.description}`}
+          />
+        )}
+        <div className="flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <Badge className={`font-normal ${getCategoryColor(expense.category)}`}>
+              {getCategoryLabel(expense.category)}
+            </Badge>
+            <span className="text-muted-foreground text-sm">
+              {format(expense.date, "MMM d, yyyy")}
+            </span>
+          </div>
+          <p className="font-medium">{expense.description}</p>
+          {expense.location && <p className="text-muted-foreground text-sm">{expense.location}</p>}
+          {expense.tags && expense.tags.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {expense.tags.map((tag) => (
+                <Badge key={tag} variant="outline" className="text-xs">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <span className="text-lg font-semibold">{formatCurrency(expense.amount)}</span>
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleEditClick(expense)}
+              aria-label={`Edit expense: ${expense.description}`}
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleDeleteClick(expense.id)}
+              aria-label={`Delete expense: ${expense.description}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+
   if (!expenses || expenses.length === 0) {
     return (
       <div className="px-4 py-12 text-center">
@@ -79,67 +144,36 @@ export default function ExpenseList({ expenses, onDelete, onEdit }: ExpenseListP
     );
   }
 
+  if (viewMode === "grid") {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {sortedExpenses.map(renderCard)}
+        </div>
+
+        {editingExpense && (
+          <ExpenseDialog
+            expense={editingExpense}
+            open={!!editingExpense}
+            onOpenChange={(open) => !open && setEditingExpense(null)}
+            onSave={handleEditSave}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Mobile view */}
-      <div className="block space-y-3 md:hidden">
-        {sortedExpenses.map((expense) => (
-          <Card key={expense.id} className="p-4">
-            <div className="mb-2 flex items-start justify-between">
-              <div className="flex-1">
-                <div className="mb-1 flex items-center gap-2">
-                  <Badge className={`font-normal ${getCategoryColor(expense.category)}`}>
-                    {getCategoryLabel(expense.category)}
-                  </Badge>
-                  <span className="text-muted-foreground text-sm">
-                    {format(expense.date, "MMM d, yyyy")}
-                  </span>
-                </div>
-                <p className="font-medium">{expense.description}</p>
-                {expense.location && (
-                  <p className="text-muted-foreground text-sm">{expense.location}</p>
-                )}
-                {expense.tags && expense.tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {expense.tags.map((tag) => (
-                      <Badge key={tag} variant="outline" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <span className="text-lg font-semibold">{formatCurrency(expense.amount)}</span>
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleEditClick(expense)}
-                    aria-label={`Edit expense: ${expense.description}`}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteClick(expense.id)}
-                    aria-label={`Delete expense: ${expense.description}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+      <div className="block space-y-3 md:hidden">{sortedExpenses.map(renderCard)}</div>
 
       {/* Desktop view */}
       <div className="hidden overflow-x-auto rounded-md md:block">
         <table className="w-full min-w-[800px] border-collapse">
           <thead>
             <tr className="border-b text-left">
+              {onToggleSelection && <th className="w-10 px-4 py-3" />}
               <th className="px-4 py-3 font-medium">
                 <Button
                   variant="ghost"
@@ -191,6 +225,15 @@ export default function ExpenseList({ expenses, onDelete, onEdit }: ExpenseListP
           <tbody>
             {sortedExpenses.map((expense) => (
               <tr key={expense.id} className="hover:bg-muted/50 border-b transition-colors">
+                {onToggleSelection && (
+                  <td className="px-4 py-3">
+                    <Checkbox
+                      checked={selectedExpenses.includes(expense.id)}
+                      onChange={() => onToggleSelection(expense.id)}
+                      aria-label={`Select expense: ${expense.description}`}
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-3">{format(expense.date, "MMM d, yyyy")}</td>
                 <td className="px-4 py-3">
                   <Badge className={`font-normal ${getCategoryColor(expense.category)}`}>

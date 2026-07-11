@@ -23,20 +23,10 @@ export function isExpenseType(obj: unknown): obj is ExpenseType {
 }
 
 // Type guard for ExpenseCategory
+// Categories are user-defined (stored per-user in Firestore), so any
+// non-empty string is a valid category — not just the built-in defaults.
 export function isExpenseCategory(value: string): value is ExpenseCategory {
-  const validCategories = [
-    "food",
-    "housing",
-    "transportation",
-    "utilities",
-    "entertainment",
-    "healthcare",
-    "shopping",
-    "education",
-    "personal",
-    "other",
-  ];
-  return validCategories.includes(value);
+  return value.trim().length > 0;
 }
 
 // Safe expense transformer for Firebase data
