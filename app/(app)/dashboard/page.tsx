@@ -3,16 +3,21 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { getAllExpenses } from "@/lib/expenses";
+import {
+  useExpensesQuery,
+  useUpdateExpenseMutation,
+  useDeleteExpenseMutation,
+} from "@/lib/queries/expenses";
 import { formatCurrency } from "@/lib/utils";
 import { ExpenseType, EXPENSE_CATEGORIES } from "@/types/expense";
-import { handleError } from "@/lib/utils/errorHandler";
+import { handleError, showSuccessMessage } from "@/lib/utils/errorHandler";
 import { useLogger } from "@/lib/hooks/useLogger";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import ExpenseList from "@/components/expenses/ExpenseList";
+import DeleteConfirmDialog from "@/components/expenses/DeleteConfirmDialog";
 import MonthlyBarChart from "@/components/analytics/MonthlyBarChart";
 import CategoryPieChart from "@/components/analytics/CategoryPieChart";
 
@@ -38,31 +43,45 @@ interface ChartData {
 export default function DashboardPage() {
   const { user } = useAuth();
   const { logAction } = useLogger();
-  const [expenses, setExpenses] = useState<ExpenseType[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const expensesQuery = useExpensesQuery(user?.uid);
+  const expenses = useMemo(() => expensesQuery.data ?? [], [expensesQuery.data]);
+  const loading = expensesQuery.isLoading;
+
+  const updateMutation = useUpdateExpenseMutation(user?.uid);
+  const deleteMutation = useDeleteExpenseMutation(user?.uid);
+  const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
-
     logAction("page_visited", {
       page: "dashboard",
       timestamp: new Date().toISOString(),
     });
-
-    const fetchExpenses = async () => {
-      try {
-        setLoading(true);
-        const allData = await getAllExpenses(user.uid);
-        setExpenses(allData);
-      } catch (error) {
-        handleError(error, "Dashboard - fetching expenses");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchExpenses();
   }, [user, logAction]);
+
+  const handleEditExpense = async (updated: ExpenseType) => {
+    if (!user) return;
+    try {
+      const { id, userId: _u, createdAt: _c, updatedAt: _up, ...patch } = updated;
+      await updateMutation.mutateAsync({ id, userId: user.uid, patch });
+      showSuccessMessage("Expense updated successfully");
+    } catch (err) {
+      handleError(err, "Dashboard - updating expense");
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!user || !deleteExpenseId) return;
+    try {
+      await deleteMutation.mutateAsync({ id: deleteExpenseId });
+      setDeleteExpenseId(null);
+      showSuccessMessage("Expense deleted successfully");
+    } catch (err) {
+      handleError(err, "Dashboard - deleting expense");
+      throw err;
+    }
+  };
 
   const recentExpenses = useMemo(() => expenses.slice(0, 8), [expenses]);
 
@@ -164,6 +183,13 @@ export default function DashboardPage() {
     return { name: cat?.label || key, amount };
   }, [expensesByCategory]);
 
+  const statValue = (amount: number) =>
+    loading ? (
+      <span className="text-muted-foreground">—</span>
+    ) : (
+      <span className="tabular-nums">{formatCurrency(amount)}</span>
+    );
+
   return (
     <div className="container mx-auto max-w-7xl px-4 py-6 lg:px-6 lg:py-8">
       <div className="mb-6 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
@@ -194,32 +220,32 @@ export default function DashboardPage() {
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total"
-          value={<span className="tabular-nums">{formatCurrency(totalExpenses)}</span>}
+          value={statValue(totalExpenses)}
           icon={Wallet}
-          hint={<span>{expenses.length} transactions</span>}
+          hint={loading ? undefined : <span>{expenses.length} transactions</span>}
         />
         <StatCard
           label="This month"
-          value={<span className="tabular-nums">{formatCurrency(currentMonth)}</span>}
+          value={statValue(currentMonth)}
           icon={Calendar}
           trend={
-            monthlyGrowth !== 0
+            !loading && monthlyGrowth !== 0
               ? { value: Math.abs(monthlyGrowth), isPositive: monthlyGrowth < 0 }
               : undefined
           }
-          hint={<span>vs last month</span>}
+          hint={loading ? undefined : <span>vs last month</span>}
         />
         <StatCard
           label="This week"
-          value={<span className="tabular-nums">{formatCurrency(currentWeek)}</span>}
+          value={statValue(currentWeek)}
           icon={TrendingUp}
-          hint={<span>Last 7 days</span>}
+          hint={loading ? undefined : <span>Last 7 days</span>}
         />
         <StatCard
           label="Avg transaction"
-          value={<span className="tabular-nums">{formatCurrency(averageTransaction)}</span>}
+          value={statValue(averageTransaction)}
           icon={CreditCard}
-          hint={topCategory ? <span>Top: {topCategory.name}</span> : undefined}
+          hint={!loading && topCategory ? <span>Top: {topCategory.name}</span> : undefined}
         />
       </div>
 
@@ -239,7 +265,9 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="h-[320px]">
-            {monthlyData.some((m) => m.amount > 0) ? (
+            {loading ? (
+              <ChartLoading />
+            ) : monthlyData.some((m) => m.amount > 0) ? (
               <MonthlyBarChart data={monthlyData} />
             ) : (
               <EmptyChart icon={BarChart3} label="No monthly data" />
@@ -260,7 +288,9 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="h-[320px]">
-            {pieChartData.length > 0 ? (
+            {loading ? (
+              <ChartLoading />
+            ) : pieChartData.length > 0 ? (
               <CategoryPieChart data={pieChartData} />
             ) : (
               <EmptyChart icon={PieChart} label="No category data" />
@@ -291,8 +321,8 @@ export default function DashboardPage() {
             ) : recentExpenses.length > 0 ? (
               <ExpenseList
                 expenses={recentExpenses}
-                onEdit={() => {}}
-                onDelete={() => {}}
+                onEdit={handleEditExpense}
+                onDelete={(id) => setDeleteExpenseId(id)}
                 viewMode="list"
               />
             ) : (
@@ -307,6 +337,22 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <DeleteConfirmDialog
+        open={!!deleteExpenseId}
+        onOpenChange={() => setDeleteExpenseId(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete expense"
+        description="Are you sure? This action cannot be undone."
+      />
+    </div>
+  );
+}
+
+function ChartLoading() {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent" />
     </div>
   );
 }

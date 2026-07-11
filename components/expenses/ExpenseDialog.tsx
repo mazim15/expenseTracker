@@ -35,6 +35,8 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { getUserCategories } from "@/lib/categories";
 import { useLogger } from "@/lib/hooks/useLogger";
 import { useExpensesQuery } from "@/lib/queries/expenses";
+import { getExpenseGroup, findRelatedExpenses, getLocationArea } from "@/lib/utils/expenseGrouping";
+import { formatCurrency } from "@/lib/utils";
 
 type ExpenseDialogProps = {
   expense?: ExpenseType;
@@ -83,6 +85,17 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
       .sort((a, b) => b.count - a.count)
       .map((t) => t.display);
   }, [expensesQuery.data]);
+
+  const purchaseHistory = useMemo(() => {
+    if (!expense) return null;
+    const related = findRelatedExpenses(expense, expensesQuery.data ?? []);
+    if (related.length < 2) return null;
+    return {
+      group: getExpenseGroup(expense),
+      items: related,
+      total: related.reduce((sum, e) => sum + e.amount, 0),
+    };
+  }, [expense, expensesQuery.data]);
 
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
@@ -516,6 +529,38 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                   </div>
                 )}
               </div>
+
+              {purchaseHistory && (
+                <div className="bg-muted/30 rounded-md border p-3">
+                  <p className="text-xs font-medium">
+                    {purchaseHistory.group?.label} · {purchaseHistory.items.length} times ·{" "}
+                    {formatCurrency(purchaseHistory.total)} total
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {purchaseHistory.items.slice(0, 8).map((e) => {
+                      const area = getLocationArea(e.location);
+                      return (
+                        <li
+                          key={e.id}
+                          className="text-muted-foreground flex items-baseline justify-between gap-2 text-xs"
+                        >
+                          <span className="truncate">
+                            {format(e.date, "MMM d, yyyy")}
+                            {area ? ` · ${area}` : ""}
+                            {e.description ? ` · ${e.description}` : ""}
+                          </span>
+                          <span className="tabular-nums">{formatCurrency(e.amount)}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {purchaseHistory.items.length > 8 && (
+                    <p className="text-muted-foreground mt-1 text-[10px]">
+                      +{purchaseHistory.items.length - 8} more
+                    </p>
+                  )}
+                </div>
+              )}
 
               <Button
                 type="submit"
