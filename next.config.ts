@@ -102,6 +102,10 @@ const nextConfig: NextConfig = {
 
   // Output configuration for deployment
   output: "standalone",
+
+  // Without this, tracing walks up past the project and the standalone build
+  // lands under .next/standalone/Desktop/Web Apps/... instead of at its root.
+  outputFileTracingRoot: __dirname,
 };
 
 export default nextConfig;
