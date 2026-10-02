@@ -1,7 +1,9 @@
 "use client";
 
-import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
+import { useState } from "react";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { CHART_COLORS } from "@/lib/constants/categoryColors";
+import { cn, formatCurrency } from "@/lib/utils";
 
 interface ChartData {
   name: string;
@@ -14,18 +16,7 @@ interface CategoryPieChartProps {
 }
 
 export default function CategoryPieChart({ data }: CategoryPieChartProps) {
-  const tooltipFormatter = (value: number) => `${Number(value).toFixed(1)}%`;
-
-  // Debug log
-  console.log("CategoryPieChart data:", data);
-
-  const legendFormatter = (value: string) => {
-    const item = data.find((d) => d.name === value);
-    if (!item) return value;
-    const total = data.reduce((sum, item) => sum + item.value, 0);
-    const percent = ((item.value / total) * 100).toFixed(1);
-    return `${value} (${percent}%)`;
-  };
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   if (!data || data.length === 0) {
     return (
@@ -35,36 +26,76 @@ export default function CategoryPieChart({ data }: CategoryPieChartProps) {
     );
   }
 
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const active = activeIndex != null ? data[activeIndex] : null;
+
   return (
-    <div role="img" aria-label="Expenses by category pie chart" className="h-full w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            labelLine={false}
-            outerRadius={80}
-            fill="#8884d8"
-            dataKey="value"
-            label={({ name, percent }) => {
-              if (percent < 0.05) return null;
-              return `${name} (${(percent * 100).toFixed(0)}%)`;
-            }}
+    <div
+      role="img"
+      aria-label="Expenses by category donut chart"
+      className="flex h-full w-full flex-col gap-4"
+    >
+      <div className="relative min-h-0 flex-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              cx="50%"
+              cy="50%"
+              innerRadius="68%"
+              outerRadius="96%"
+              paddingAngle={3}
+              cornerRadius={8}
+              stroke="none"
+              animationDuration={900}
+              animationEasing="ease-out"
+              onMouseEnter={(_, i) => setActiveIndex(i)}
+              onMouseLeave={() => setActiveIndex(null)}
+            >
+              {data.map((_, index) => (
+                <Cell
+                  key={index}
+                  fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  opacity={activeIndex == null || activeIndex === index ? 1 : 0.35}
+                  style={{ transition: "opacity 200ms" }}
+                />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="text-muted-foreground max-w-[60%] truncate text-xs font-medium">
+            {active ? active.name : "Total"}
+          </span>
+          <span className="text-lg font-extrabold tracking-tight tabular-nums">
+            {formatCurrency(active ? active.value : total, { notation: "compact" })}
+          </span>
+        </div>
+      </div>
+
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+        {data.map((item, index) => (
+          <li
+            key={item.name}
+            onMouseEnter={() => setActiveIndex(index)}
+            onMouseLeave={() => setActiveIndex(null)}
+            className={cn(
+              "flex items-center gap-2 transition-opacity",
+              activeIndex != null && activeIndex !== index && "opacity-40",
+            )}
           >
-            {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-            ))}
-          </Pie>
-          <Tooltip formatter={tooltipFormatter} />
-          <Legend
-            layout="vertical"
-            align="right"
-            verticalAlign="middle"
-            formatter={legendFormatter}
-          />
-        </PieChart>
-      </ResponsiveContainer>
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+            />
+            <span className="text-muted-foreground min-w-0 flex-1 truncate">{item.name}</span>
+            <span className="font-semibold tabular-nums">
+              {total > 0 ? ((item.value / total) * 100).toFixed(0) : 0}%
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

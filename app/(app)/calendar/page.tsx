@@ -19,6 +19,9 @@ import { formatCurrency, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AnimatedNumber } from "@/components/ui/animated-number";
+import { CategoryIcon } from "@/components/expenses/CategoryIcon";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -133,23 +136,20 @@ export default function CalendarPage() {
   const leadingBlanks = monthStart.getDay(); // 0 = Sunday
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mb-6 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Your spending across the month — darker means a heavier day.
-          </p>
-        </div>
+    <div className="mx-auto max-w-6xl px-4 py-4 lg:px-8 lg:py-2">
+      <div className="mb-5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+        <p className="text-muted-foreground text-sm">
+          Your spending across the month — darker means a heavier day.
+        </p>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setCursor(startOfMonth(new Date()))}>
             Today
           </Button>
-          <div className="bg-muted flex items-center rounded-md p-0.5">
+          <div className="bg-card shadow-soft flex items-center rounded-full p-1">
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="h-8 w-8 rounded-full p-0"
               onClick={() => setCursor((c) => subMonths(c, 1))}
               aria-label="Previous month"
             >
@@ -159,7 +159,7 @@ export default function CalendarPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="h-8 w-8 rounded-full p-0"
               onClick={() => setCursor((c) => addMonths(c, 1))}
               aria-label="Next month"
             >
@@ -169,19 +169,20 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div className="mb-5 grid gap-3 sm:grid-cols-3 lg:gap-4">
         <StatCard
           label="Month total"
           icon={Wallet}
-          value={<span className="tabular-nums">{formatCurrency(monthTotal)}</span>}
+          value={<AnimatedNumber value={monthTotal} />}
           hint={<span>{monthCount} expenses</span>}
         />
         <StatCard
           label="Busiest day"
           icon={Flame}
+          tone="bg-orange-500/12 text-orange-600 dark:text-orange-300"
           value={
             busiestDay ? (
-              <span className="tabular-nums">{formatCurrency(busiestDay.total)}</span>
+              <AnimatedNumber value={busiestDay.total} />
             ) : (
               <span className="text-muted-foreground text-base font-normal">—</span>
             )
@@ -195,7 +196,8 @@ export default function CalendarPage() {
         <StatCard
           label="Avg / active day"
           icon={TrendingUp}
-          value={<span className="tabular-nums">{formatCurrency(avgPerActiveDay)}</span>}
+          tone="bg-highlight/40 text-highlight-foreground"
+          value={<AnimatedNumber value={avgPerActiveDay} />}
           hint={<span>Days with spending</span>}
         />
       </div>
@@ -203,8 +205,13 @@ export default function CalendarPage() {
       <Card>
         <CardContent className="p-3 sm:p-4">
           {loading ? (
-            <div className="flex justify-center py-24">
-              <div className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+            <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <Skeleton
+                  key={i}
+                  className="aspect-square rounded-2xl sm:aspect-auto sm:h-[92px]"
+                />
+              ))}
             </div>
           ) : (
             <>
@@ -228,7 +235,7 @@ export default function CalendarPage() {
                   />
                 ))}
 
-                {days.map((day) => {
+                {days.map((day, dayIndex) => {
                   const key = format(day, "yyyy-MM-dd");
                   const data = byDay.get(key);
                   const level = data?.level ?? 0;
@@ -236,20 +243,21 @@ export default function CalendarPage() {
 
                   const tile = (
                     <div
-                      style={
-                        level > 0
+                      style={{
+                        animationDelay: `${dayIndex * 12}ms`,
+                        ...(level > 0
                           ? {
                               backgroundColor: `color-mix(in oklab, var(--primary) ${
                                 LEVEL_ALPHA[level] * 100
                               }%, transparent)`,
                             }
-                          : undefined
-                      }
+                          : {}),
+                      }}
                       className={cn(
-                        "group relative flex aspect-square flex-col rounded-xl border p-2 text-left transition-all sm:aspect-auto sm:min-h-[92px]",
-                        level === 0 && "border-border/60 bg-transparent",
+                        "group animate-scale-in relative flex aspect-square flex-col rounded-2xl p-2 text-left transition-all duration-200 sm:aspect-auto sm:min-h-[92px]",
+                        level === 0 && "bg-muted/40",
                         level > 0 &&
-                          "cursor-pointer border-transparent hover:z-10 hover:scale-[1.03] hover:shadow-md",
+                          "hover:shadow-lift cursor-pointer hover:z-10 hover:-translate-y-0.5 hover:scale-[1.04]",
                         level >= 4 && "text-primary-foreground",
                         today && "ring-primary ring-offset-background ring-2 ring-offset-1",
                       )}
@@ -300,7 +308,7 @@ export default function CalendarPage() {
                       <PopoverContent
                         align="center"
                         sideOffset={8}
-                        className="w-[19rem] overflow-hidden border-0 p-0 shadow-xl"
+                        className="w-[19rem] overflow-hidden rounded-3xl border-0 p-0"
                       >
                         <DayDetail day={day} data={data} />
                       </PopoverContent>
@@ -358,13 +366,13 @@ function MonthPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="hover:bg-background flex h-7 min-w-[132px] items-center justify-center gap-1 rounded-[5px] px-2 text-sm font-medium tabular-nums transition-colors"
+          className="hover:bg-muted flex h-8 min-w-[140px] items-center justify-center gap-1 rounded-full px-3 text-sm font-bold tabular-nums transition-colors"
         >
           {format(value, "MMMM yyyy")}
           <ChevronDown className="text-muted-foreground h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="center" sideOffset={8} className="w-64 p-3 shadow-xl">
+      <PopoverContent align="center" sideOffset={8} className="w-64 p-3">
         <div className="mb-3 flex items-center justify-between">
           <Button
             variant="ghost"
@@ -401,7 +409,7 @@ function MonthPicker({
                   setOpen(false);
                 }}
                 className={cn(
-                  "relative rounded-lg py-2 text-sm font-medium transition-colors",
+                  "relative rounded-full py-2 text-sm font-semibold transition-colors",
                   selected
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "hover:bg-muted text-foreground",
@@ -441,18 +449,18 @@ function DayDetail({ day, data }: { day: Date; data: DayData }) {
   return (
     <div>
       {/* Gradient header */}
-      <div className="from-primary to-primary/75 relative overflow-hidden bg-gradient-to-br px-4 pt-3.5 pb-4">
-        <div className="bg-primary-foreground/10 pointer-events-none absolute -top-8 -right-6 h-24 w-24 rounded-full" />
-        <div className="bg-primary-foreground/10 pointer-events-none absolute -right-2 -bottom-10 h-20 w-20 rounded-full" />
-        <div className="text-primary-foreground relative">
-          <p className="text-primary-foreground/80 text-[11px] font-medium tracking-wide uppercase">
+      <div className="bg-hero relative overflow-hidden px-4 pt-3.5 pb-4">
+        <div className="pointer-events-none absolute -top-8 -right-6 h-24 w-24 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute -right-2 -bottom-10 h-20 w-20 rounded-full bg-white/10" />
+        <div className="relative">
+          <p className="text-[11px] font-medium tracking-wide text-white/80 uppercase">
             {format(day, "EEEE")}
           </p>
           <p className="text-sm font-semibold">{format(day, "MMMM d, yyyy")}</p>
           <p className="mt-2 text-2xl font-bold tracking-tight tabular-nums">
             {formatCurrency(data.total)}
           </p>
-          <p className="text-primary-foreground/80 text-xs">
+          <p className="text-xs text-white/80">
             {data.expenses.length} expense{data.expenses.length > 1 ? "s" : ""}
           </p>
         </div>
@@ -477,9 +485,9 @@ function DayDetail({ day, data }: { day: Date; data: DayData }) {
         {data.expenses.map((exp) => (
           <div
             key={exp.id}
-            className="hover:bg-muted flex items-center gap-3 rounded-lg px-2.5 py-2 transition-colors"
+            className="hover:bg-muted flex items-center gap-3 rounded-2xl px-2 py-2 transition-colors"
           >
-            <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dotColor(exp.category))} />
+            <CategoryIcon category={exp.category} className="h-9 w-9 rounded-xl" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{exp.description}</p>
               <p className="text-muted-foreground truncate text-xs">

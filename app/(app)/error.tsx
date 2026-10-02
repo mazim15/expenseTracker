@@ -2,7 +2,9 @@
 
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { StatusScreen } from "@/components/layout/StatusScreen";
 import { handleError } from "@/lib/utils/errorHandler";
+import { AlertTriangle } from "lucide-react";
 
 export default function AppSegmentError({
   error,
@@ -16,20 +18,22 @@ export default function AppSegmentError({
   }, [error]);
 
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8 text-center">
-      <h2 className="text-xl font-semibold">Something went wrong</h2>
-      <p className="text-muted-foreground max-w-md text-sm">
-        We hit an unexpected error loading this page. You can try again or head back to your
-        dashboard.
-      </p>
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={reset}>
-          Try again
-        </Button>
-        <Button asChild>
-          <a href="/dashboard">Go to dashboard</a>
-        </Button>
-      </div>
-    </div>
+    <StatusScreen
+      className="min-h-[70vh] rounded-3xl"
+      image="/illustrations/error.png"
+      fallbackIcon={<AlertTriangle />}
+      title="Something went wrong"
+      description="We hit an unexpected error loading this page. You can try again or head back to your dashboard."
+      actions={
+        <>
+          <Button variant="outline" onClick={reset}>
+            Try again
+          </Button>
+          <Button asChild>
+            <a href="/dashboard">Go to dashboard</a>
+          </Button>
+        </>
+      }
+    />
   );
 }

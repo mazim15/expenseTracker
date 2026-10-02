@@ -1,13 +1,14 @@
-import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AppLoading() {
   return (
-    <div className="container mx-auto space-y-6 p-6">
-      <div className="space-y-2">
-        <div className="bg-muted h-8 w-48 animate-pulse rounded" />
-        <div className="bg-muted h-4 w-96 animate-pulse rounded" />
+    <div className="mx-auto max-w-7xl space-y-5 px-4 py-4 lg:px-8 lg:py-2">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-32 rounded-3xl" />
+        ))}
       </div>
-      <LoadingSkeleton />
+      <Skeleton className="h-96 rounded-3xl" />
     </div>
   );
 }

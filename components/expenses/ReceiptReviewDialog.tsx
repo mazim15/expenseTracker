@@ -1,7 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ExpenseType, ExpenseCategory, EXPENSE_CATEGORIES } from "@/types/expense";
+import { useState, useEffect, useMemo } from "react";
+import {
+  ExpenseType,
+  ExpenseCategory,
+  EXPENSE_CATEGORIES,
+  PAYMENT_METHODS,
+  PaymentMethod,
+  isPaymentMethod,
+} from "@/types/expense";
+import { findLikelyDuplicate } from "@/lib/utils/duplicates";
 import {
   Dialog,
   DialogContent,
@@ -20,8 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { formatCurrency } from "@/lib/utils";
-import { Trash2, Plus } from "lucide-react";
+import { cn, formatCurrency } from "@/lib/utils";
+import { Trash2, Plus, AlertTriangle } from "lucide-react";
 
 type ReceiptReviewDialogProps = {
   open: boolean;
@@ -30,7 +38,32 @@ type ReceiptReviewDialogProps = {
   onSave: (expenses: Partial<ExpenseType>[]) => void;
   onCancel: () => void;
   receiptImages?: string[] | null;
+  /** Existing expenses, used to flag items that look already recorded. */
+  existing?: ExpenseType[];
 };
+
+function duplicateOf(e: Partial<ExpenseType>, existing: ExpenseType[]) {
+  if (!e.amount || !e.date) return null;
+  return findLikelyDuplicate(
+    {
+      amount: e.amount,
+      date: e.date,
+      description: e.description ?? "",
+      category: e.category ?? "other",
+      location: e.location,
+    },
+    existing,
+  );
+}
+
+function storedPaymentMethod(): PaymentMethod | "" {
+  try {
+    const v = localStorage.getItem("lastPaymentMethod");
+    return isPaymentMethod(v) ? v : "";
+  } catch {
+    return "";
+  }
+}
 
 export default function ReceiptReviewDialog({
   open,
@@ -39,10 +72,25 @@ export default function ReceiptReviewDialog({
   onSave,
   onCancel,
   receiptImages,
+  existing = [],
 }: ReceiptReviewDialogProps) {
   const [expenses, setExpenses] = useState<Partial<ExpenseType>[]>(initialExpenses);
-  const [selectedItems, setSelectedItems] = useState<Record<number, boolean>>(
-    initialExpenses.reduce((acc, _, index) => ({ ...acc, [index]: true }), {}),
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
+
+  const duplicates = useMemo(
+    () => expenses.map((e) => duplicateOf(e, existing)),
+    [expenses, existing],
+  );
+
+  // Items that look already recorded start unchecked
+  const initialSelection = (list: Partial<ExpenseType>[]) =>
+    list.reduce<Record<number, boolean>>(
+      (acc, e, index) => ({ ...acc, [index]: !duplicateOf(e, existing) }),
+      {},
+    );
+
+  const [selectedItems, setSelectedItems] = useState<Record<number, boolean>>(() =>
+    initialSelection(initialExpenses),
   );
 
   // Calculate total amount for selected expenses
@@ -76,7 +124,16 @@ export default function ReceiptReviewDialog({
   };
 
   const handleSave = () => {
-    const selectedExpenses = expenses.filter((_, index) => selectedItems[index]);
+    const selectedExpenses = expenses
+      .filter((_, index) => selectedItems[index])
+      .map((e) => (paymentMethod ? { ...e, paymentMethod } : e));
+    if (paymentMethod) {
+      try {
+        localStorage.setItem("lastPaymentMethod", paymentMethod);
+      } catch {
+        // storage unavailable
+      }
+    }
     onSave(selectedExpenses);
   };
 
@@ -85,8 +142,11 @@ export default function ReceiptReviewDialog({
     if (initialExpenses.length > 0) {
       setExpenses(initialExpenses);
       // Also reset the selected items when expenses change
-      setSelectedItems(initialExpenses.reduce((acc, _, index) => ({ ...acc, [index]: true }), {}));
+      setSelectedItems(initialSelection(initialExpenses));
+      setPaymentMethod(storedPaymentMethod());
     }
+    // initialSelection only depends on `existing`, which is stable while the dialog is open
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialExpenses]);
 
   return (
@@ -154,6 +214,13 @@ export default function ReceiptReviewDialog({
                             )}
                             className={!selectedItems[index] ? "opacity-50" : ""}
                           />
+                          {duplicates[index] && (
+                            <p className="mt-1 flex items-center gap-1 text-xs text-amber-600">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              Looks like &ldquo;{duplicates[index]!.description}&rdquo; you already
+                              added
+                            </p>
+                          )}
                         </div>
                         <div className="col-span-2">
                           <Input
@@ -196,6 +263,28 @@ export default function ReceiptReviewDialog({
                         </div>
                       </div>
                     ))}
+
+                    <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+                      <span className="text-sm font-medium">Paid with</span>
+                      {PAYMENT_METHODS.map((m) => (
+                        <button
+                          key={m.value}
+                          type="button"
+                          onClick={() =>
+                            setPaymentMethod((cur) => (cur === m.value ? "" : m.value))
+                          }
+                          aria-pressed={paymentMethod === m.value}
+                          className={cn(
+                            "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                            paymentMethod === m.value
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
 
                     <div className="mt-4 flex items-center justify-between border-t pt-4">
                       <p className="font-medium">Total Selected: {formatCurrency(totalAmount)}</p>

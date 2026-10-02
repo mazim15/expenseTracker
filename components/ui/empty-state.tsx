@@ -1,9 +1,16 @@
-import { ReactNode } from "react";
+"use client";
+
+import { ReactNode, useState } from "react";
+import Image from "next/image";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { fadeUp, stagger } from "@/lib/motion";
 
 interface EmptyStateProps {
   icon: ReactNode;
+  /** Illustration path under /public, e.g. "/illustrations/empty-expenses.png". Falls back to `icon` if missing. */
+  image?: string;
   title: string;
   description: string;
   actionLabel?: string;
@@ -14,6 +21,7 @@ interface EmptyStateProps {
 
 export function EmptyState({
   icon,
+  image,
   title,
   description,
   actionLabel,
@@ -21,35 +29,57 @@ export function EmptyState({
   className,
   variant = "default",
 }: EmptyStateProps) {
-  const baseClasses = "flex flex-col items-center justify-center text-center animate-fade-in";
+  const [imageFailed, setImageFailed] = useState(false);
 
   const variantClasses = {
-    default: "py-16 px-6",
+    default: "py-14 px-6",
     minimal: "py-8 px-4",
-    card: "py-12 px-8 rounded-lg border bg-card",
+    card: "py-12 px-8 rounded-3xl border bg-card shadow-soft",
   };
 
-  return (
-    <div className={cn(baseClasses, variantClasses[variant], className)}>
-      <div className="relative mb-6">
-        <div className="bg-primary/5 animate-pulse-slow absolute inset-0 rounded-full" />
-        <div className="from-muted via-muted/80 to-muted/60 relative rounded-full bg-gradient-to-br p-6 shadow-lg">
-          <div className="text-muted-foreground/80 [&>svg]:h-8 [&>svg]:w-8">{icon}</div>
-        </div>
-      </div>
+  const showImage = image && !imageFailed;
 
-      <div className="max-w-md space-y-3">
-        <h3 className="text-xl font-semibold tracking-tight">{title}</h3>
-        <p className="text-muted-foreground leading-relaxed">{description}</p>
-      </div>
+  return (
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={stagger(0.08)}
+      className={cn(
+        "flex flex-col items-center justify-center text-center",
+        variantClasses[variant],
+        className,
+      )}
+    >
+      <motion.div variants={fadeUp} className="relative mb-5">
+        {showImage ? (
+          <Image
+            src={image}
+            alt=""
+            width={variant === "minimal" ? 112 : 168}
+            height={variant === "minimal" ? 112 : 168}
+            className="animate-float drop-shadow-xl"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <>
+            <div className="bg-primary/15 absolute inset-0 scale-125 rounded-full blur-2xl" />
+            <div className="bg-primary/10 text-primary relative rounded-3xl p-5 [&>svg]:h-8 [&>svg]:w-8">
+              {icon}
+            </div>
+          </>
+        )}
+      </motion.div>
+
+      <motion.div variants={fadeUp} className="max-w-sm space-y-2">
+        <h3 className="text-lg font-bold tracking-tight">{title}</h3>
+        <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>
+      </motion.div>
 
       {actionLabel && onAction && (
-        <div className="mt-8">
-          <Button onClick={onAction} className="hover-lift shadow-md" size="lg">
-            {actionLabel}
-          </Button>
-        </div>
+        <motion.div variants={fadeUp} className="mt-6">
+          <Button onClick={onAction}>{actionLabel}</Button>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }

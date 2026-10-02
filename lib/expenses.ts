@@ -5,6 +5,8 @@ import {
   orderBy,
   limit,
   getDocs,
+  getDoc,
+  writeBatch,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -16,6 +18,7 @@ import {
   FieldValue,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { deleteReceipt } from "@/lib/receipts";
 import { ExpenseType } from "@/types/expense";
 import { transformFirebaseExpense } from "@/lib/utils/typeGuards";
 import { logError, logUserActionWithUserId } from "@/lib/logging";
@@ -114,13 +117,16 @@ export async function addExpense(
     const userExpensesCollection = collection(db, "users", userId, "expenses");
 
     const now = new Date();
-    const docRef = await addDoc(userExpensesCollection, {
+    const data: Record<string, unknown> = {
       ...expense,
       // We don't need to store userId in the document since it's in the path
       date: Timestamp.fromDate(expense.date),
       createdAt: Timestamp.fromDate(now),
       updatedAt: Timestamp.fromDate(now),
-    });
+    };
+    // Firestore rejects undefined values (e.g. an unset paymentMethod)
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+    const docRef = await addDoc(userExpensesCollection, data);
 
     // Log expense creation
     const logDetails: Record<string, unknown> = {
@@ -168,6 +174,8 @@ export async function updateExpense(
       // Add new fields
       tags: expenseData.tags,
       location: expenseData.location,
+      paymentMethod: expenseData.paymentMethod,
+      receiptPath: expenseData.receiptPath,
       updatedAt: Timestamp.fromDate(new Date()),
     };
 
@@ -213,7 +221,10 @@ export async function deleteExpense(id: string, userId: string): Promise<void> {
   try {
     // Create a reference to the specific expense document
     const expenseDoc = doc(db, "users", userId, "expenses", id);
+    const snapshot = await getDoc(expenseDoc);
+    const receiptPath = snapshot.data()?.receiptPath;
     await deleteDoc(expenseDoc);
+    if (typeof receiptPath === "string") await deleteReceipt(receiptPath);
 
     // Log expense deletion
     await logUserActionWithUserId(userId, "expense_deleted", {});
@@ -256,4 +267,29 @@ export async function getExpensesForPeriod(
     }
     throw new Error("Failed to get expenses for period: Unknown error");
   }
+}
+
+// Import many expenses at once (CSV import). Writes in batches of 400.
+export async function importExpenses(
+  userId: string,
+  items: Omit<ExpenseType, "id" | "userId" | "createdAt" | "updatedAt">[],
+): Promise<number> {
+  const userExpensesCollection = collection(db, "users", userId, "expenses");
+  const now = Timestamp.now();
+  for (let i = 0; i < items.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const item of items.slice(i, i + 400)) {
+      const data: Record<string, unknown> = {
+        ...item,
+        date: Timestamp.fromDate(item.date),
+        createdAt: now,
+        updatedAt: now,
+      };
+      Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+      batch.set(doc(userExpensesCollection), data);
+    }
+    await batch.commit();
+  }
+  await logUserActionWithUserId(userId, "expenses_imported", { count: items.length });
+  return items.length;
 }

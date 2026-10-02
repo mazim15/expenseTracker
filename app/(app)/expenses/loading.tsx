@@ -1,25 +1,23 @@
+import { Skeleton } from "@/components/ui/skeleton";
+
 export default function ExpensesLoading() {
   return (
-    <div className="container mx-auto space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <div className="bg-muted h-8 w-32 animate-pulse rounded" />
-          <div className="bg-muted h-4 w-48 animate-pulse rounded" />
-        </div>
-        <div className="bg-primary/20 h-10 w-32 animate-pulse rounded" />
+    <div className="mx-auto max-w-7xl space-y-5 px-4 py-4 lg:px-8 lg:py-2">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-32 rounded-3xl" />
+        ))}
       </div>
-
-      <div className="space-y-4">
+      <Skeleton className="h-11 rounded-xl" />
+      <div className="bg-card shadow-soft space-y-3 rounded-3xl p-5">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="space-y-3 rounded-lg border p-4">
-            <div className="flex items-start justify-between">
-              <div className="space-y-2">
-                <div className="bg-muted h-5 w-40 animate-pulse rounded" />
-                <div className="bg-muted h-4 w-24 animate-pulse rounded" />
-              </div>
-              <div className="bg-muted h-6 w-20 animate-pulse rounded" />
+          <div key={i} className="flex items-center gap-3">
+            <Skeleton className="h-11 w-11 rounded-2xl" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-3.5 w-1/3" />
+              <Skeleton className="h-3 w-1/5" />
             </div>
-            <div className="bg-muted h-4 w-64 animate-pulse rounded" />
+            <Skeleton className="h-4 w-20" />
           </div>
         ))}
       </div>

@@ -2,7 +2,12 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { ExpenseType, ExpenseCategoryType, EXPENSE_CATEGORIES } from "@/types/expense";
+import {
+  ExpenseType,
+  ExpenseCategoryType,
+  EXPENSE_CATEGORIES,
+  PAYMENT_METHODS,
+} from "@/types/expense";
 import { addExpense } from "@/lib/expenses";
 import {
   useExpensesQuery,
@@ -18,9 +23,8 @@ import {
   Plus,
   Search,
   Download,
-  Upload,
+  ScanLine,
   Loader2,
-  Filter,
   SortAsc,
   Calendar,
   BarChart3,
@@ -32,10 +36,18 @@ import {
   Wallet,
   Target,
   CheckSquare,
+  Repeat,
+  Upload,
+  CreditCard,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AnimatedNumber } from "@/components/ui/animated-number";
+import { EmptyState } from "@/components/ui/empty-state";
+import { motion } from "framer-motion";
+import { fadeUp, spring, stagger } from "@/lib/motion";
 import ExpenseList from "@/components/expenses/ExpenseList";
 import ExpenseDialog from "@/components/expenses/ExpenseDialog";
 import {
@@ -52,10 +64,12 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import ReceiptReviewDialog from "@/components/expenses/ReceiptReviewDialog";
 import ScanReceiptDialog, { type ScanReceiptResult } from "@/components/expenses/ScanReceiptDialog";
-import { analyzeReceipt } from "@/lib/utils/receiptAnalysis";
+import { analyzeReceipt, formatScanCost, type ScanUsage } from "@/lib/utils/receiptAnalysis";
 import { getUserCategories } from "@/lib/categories";
+import { uploadReceipt } from "@/lib/receipts";
+import RecurringDialog from "@/components/expenses/RecurringDialog";
+import ImportCsvDialog from "@/components/expenses/ImportCsvDialog";
 import { useLogger } from "@/lib/hooks/useLogger";
-import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
 export default function ExpensesPage() {
@@ -95,6 +109,7 @@ export default function ExpensesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date-desc");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
@@ -111,6 +126,9 @@ export default function ExpensesPage() {
   const [detectedExpenses, setDetectedExpenses] = useState<Partial<ExpenseType>[]>([]);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [isScanDialogOpen, setIsScanDialogOpen] = useState(false);
+  const [isRecurringOpen, setIsRecurringOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [duplicateSource, setDuplicateSource] = useState<Partial<ExpenseType> | null>(null);
 
   const analytics = useMemo(() => {
     if (!allExpenses.length) return null;
@@ -193,6 +211,12 @@ export default function ExpensesPage() {
       filtered = filtered.filter((e) => e.category === categoryFilter);
     }
 
+    if (paymentFilter === "unspecified") {
+      filtered = filtered.filter((e) => !e.paymentMethod);
+    } else if (paymentFilter !== "all") {
+      filtered = filtered.filter((e) => e.paymentMethod === paymentFilter);
+    }
+
     const now = new Date();
     if (dateFilter === "today") {
       filtered = filtered.filter((e) => format(e.date, "yyyy-MM-dd") === format(now, "yyyy-MM-dd"));
@@ -206,7 +230,7 @@ export default function ExpensesPage() {
     }
 
     return sortExpenses(filtered, sortBy);
-  }, [allExpenses, searchTerm, categoryFilter, dateFilter, sortBy, sortExpenses]);
+  }, [allExpenses, searchTerm, categoryFilter, paymentFilter, dateFilter, sortBy, sortExpenses]);
 
   const totalFilteredCount = filteredSorted.length;
 
@@ -285,11 +309,18 @@ export default function ExpensesPage() {
     if (searchParams.get("add") === "true") {
       setIsAddDialogOpen(true);
     }
+    if (searchParams.get("recurring") === "open") {
+      setIsRecurringOpen(true);
+    }
+    // Links from search and insights: ?search=… / ?category=… set the filters once
     const searchParam = searchParams.get("search");
-    if (searchParam) {
-      setSearchTerm(searchParam);
+    const categoryParam = searchParams.get("category");
+    if (searchParam || categoryParam) {
+      if (searchParam) setSearchTerm(searchParam);
+      if (categoryParam) setCategoryFilter(categoryParam);
       const newParams = new URLSearchParams(searchParams);
       newParams.delete("search");
+      newParams.delete("category");
       router.replace(`/expenses${newParams.toString() ? "?" + newParams.toString() : ""}`);
     }
   }, [searchParams, router]);
@@ -322,7 +353,7 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, categoryFilter, dateFilter, sortBy]);
+  }, [searchTerm, categoryFilter, paymentFilter, dateFilter, sortBy]);
 
   const handleAddExpense = async (data: Omit<ExpenseType, "id" | "createdAt" | "updatedAt">) => {
     if (!user) return;
@@ -371,7 +402,11 @@ export default function ExpensesPage() {
       setScannedReceipts(images.map((img) => img.dataUrl));
       toast.loading("Analyzing receipt...");
 
-      const extracted = await analyzeReceipt(images, { knownTags });
+      let scanCost: ScanUsage | null = null;
+      const extracted = await analyzeReceipt(images, {
+        knownTags,
+        onUsage: (u) => (scanCost = u),
+      });
 
       const expenseWithUser = { ...extracted, userId: user?.uid || "" };
       setDetectedExpenses([expenseWithUser]);
@@ -379,7 +414,11 @@ export default function ExpensesPage() {
       setTimeout(() => setIsReviewDialogOpen(true), 0);
 
       toast.dismiss();
-      toast.success("Receipt scanned");
+      toast.success("Receipt scanned", {
+        description: scanCost
+          ? `Scan cost ${formatScanCost((scanCost as ScanUsage).costUsd)}`
+          : undefined,
+      });
     } catch (err) {
       toast.dismiss();
       console.error("Error analyzing receipt:", err);
@@ -394,10 +433,22 @@ export default function ExpensesPage() {
 
     try {
       toast.loading(`Adding ${expensesIn.length} expenses...`);
+      // Keep the receipt photo: one copy per expense, so deleting one never removes another's
+      let receiptFailed = false;
       for (const data of expensesIn) {
+        let receiptPath: string | undefined;
+        if (scannedReceipts?.[0]) {
+          try {
+            receiptPath = await uploadReceipt(user.uid, scannedReceipts[0]);
+          } catch (err) {
+            console.error("Receipt upload failed:", err);
+            receiptFailed = true;
+          }
+        }
         await addExpense(
           {
             ...data,
+            ...(receiptPath && { receiptPath }),
             userId: user.uid,
             date: data.date || new Date(),
             amount: data.amount || 0,
@@ -413,6 +464,7 @@ export default function ExpensesPage() {
       setDetectedExpenses([]);
       toast.dismiss();
       showSuccessMessage(`${expensesIn.length} expenses added successfully`);
+      if (receiptFailed) toast.warning("Expenses saved, but the receipt photo couldn't be kept.");
     } catch (err) {
       toast.dismiss();
       handleError(err, "Expenses page - adding bulk expenses");
@@ -422,18 +474,28 @@ export default function ExpensesPage() {
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / ITEMS_PER_PAGE));
 
   return (
-    <div className="container mx-auto max-w-7xl px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mb-6 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Expenses</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Track, filter, and analyze every transaction.
-          </p>
-        </div>
+    <div className="mx-auto max-w-7xl px-4 py-4 lg:px-8 lg:py-2">
+      <div className="mb-5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+        <p className="text-muted-foreground text-sm">
+          Track, filter, and analyze every transaction.
+        </p>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => refetch()} variant="outline" size="sm" disabled={loading}>
+          <Button
+            onClick={() => refetch()}
+            variant="ghost"
+            size="icon"
+            disabled={loading}
+            aria-label="Refresh"
+          >
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-            Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setIsRecurringOpen(true)}>
+            <Repeat className="h-4 w-4" />
+            Recurring
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setIsImportOpen(true)}>
+            <Upload className="h-4 w-4" />
+            Import
           </Button>
           <Button
             variant="outline"
@@ -453,7 +515,7 @@ export default function ExpensesPage() {
             {isAnalyzing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Upload className="h-4 w-4" />
+              <ScanLine className="h-4 w-4" />
             )}
             {isAnalyzing ? "Analyzing…" : "Scan receipt"}
           </Button>
@@ -465,90 +527,89 @@ export default function ExpensesPage() {
       </div>
 
       {analytics && (
-        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="This month"
-            icon={Calendar}
-            value={
-              <span className="tabular-nums">{formatCurrency(analytics.currentMonth.total)}</span>
-            }
-            trend={
-              analytics.growth.percentage !== 0
-                ? {
-                    value: Math.abs(analytics.growth.percentage),
-                    isPositive: !analytics.growth.isIncrease,
-                  }
-                : undefined
-            }
-            hint={<span>{analytics.currentMonth.count} expenses</span>}
-          />
-          <StatCard
-            label="Total tracked"
-            icon={Wallet}
-            value={<span className="tabular-nums">{formatCurrency(analytics.totalAmount)}</span>}
-            hint={<span>{analytics.totalExpenses} transactions</span>}
-          />
-          <StatCard
-            label="Avg expense"
-            icon={BarChart3}
-            value={<span className="tabular-nums">{formatCurrency(analytics.averageExpense)}</span>}
-            hint={<span>Across all entries</span>}
-          />
-          <StatCard
-            label="Top category"
-            icon={Target}
-            value={
-              analytics.topCategory ? (
-                <span className="tabular-nums">{formatCurrency(analytics.topCategory.amount)}</span>
-              ) : (
-                <span className="text-muted-foreground text-base font-normal">—</span>
-              )
-            }
-            hint={<span className="truncate">{analytics.topCategory?.name || "No data"}</span>}
-          />
-        </div>
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={stagger(0.06)}
+          className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4"
+        >
+          <motion.div variants={fadeUp}>
+            <StatCard
+              label="This month"
+              icon={Calendar}
+              value={<AnimatedNumber value={analytics.currentMonth.total} />}
+              trend={
+                analytics.growth.percentage !== 0
+                  ? {
+                      value: Math.abs(analytics.growth.percentage),
+                      isPositive: !analytics.growth.isIncrease,
+                    }
+                  : undefined
+              }
+              hint={<span>{analytics.currentMonth.count} expenses</span>}
+            />
+          </motion.div>
+          <motion.div variants={fadeUp}>
+            <StatCard
+              label="Total tracked"
+              icon={Wallet}
+              tone="bg-highlight/40 text-highlight-foreground"
+              value={<AnimatedNumber value={analytics.totalAmount} />}
+              hint={<span>{analytics.totalExpenses} transactions</span>}
+            />
+          </motion.div>
+          <motion.div variants={fadeUp}>
+            <StatCard
+              label="Avg expense"
+              icon={BarChart3}
+              tone="bg-violet-500/12 text-violet-600 dark:text-violet-300"
+              value={<AnimatedNumber value={analytics.averageExpense} />}
+              hint={<span>Across all entries</span>}
+            />
+          </motion.div>
+          <motion.div variants={fadeUp}>
+            <StatCard
+              label="Top category"
+              icon={Target}
+              tone="bg-orange-500/12 text-orange-600 dark:text-orange-300"
+              value={
+                analytics.topCategory ? (
+                  <AnimatedNumber value={analytics.topCategory.amount} />
+                ) : (
+                  <span className="text-muted-foreground text-base font-normal">—</span>
+                )
+              }
+              hint={<span className="truncate">{analytics.topCategory?.name || "No data"}</span>}
+            />
+          </motion.div>
+        </motion.div>
       )}
 
-      <div className="mb-4 space-y-3">
-        <div className="relative">
-          <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-          <Input
-            placeholder="Search by description, location, or tag…"
-            className="h-10 pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute top-1 right-1 h-8 w-8 p-0"
-              onClick={() => setSearchTerm("")}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-
-        <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-          <div className="flex flex-wrap gap-2">
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-9 w-[170px]">
-                <Filter className="h-3.5 w-3.5" />
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {categories.map((c: ExpenseCategoryType) => (
-                  <SelectItem key={c.value} value={c.value}>
-                    {c.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
+      <div className="bg-background/80 sticky top-16 z-20 -mx-4 mb-4 space-y-3 px-4 py-3 backdrop-blur-xl lg:top-20 lg:-mx-8 lg:px-8">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="text-muted-foreground absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2" />
+            <Input
+              placeholder="Search by description, location, or tag…"
+              className="bg-card shadow-soft pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-1.5 right-1.5 h-8 w-8"
+                onClick={() => setSearchTerm("")}
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
             <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="h-9 w-[170px]">
+              <SelectTrigger className="bg-card shadow-soft w-full gap-2 sm:w-[150px]">
                 <Calendar className="h-3.5 w-3.5" />
                 <SelectValue placeholder="Time" />
               </SelectTrigger>
@@ -560,8 +621,27 @@ export default function ExpensesPage() {
               </SelectContent>
             </Select>
 
+            <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+              <SelectTrigger
+                className="bg-card shadow-soft w-full gap-2 sm:w-[150px]"
+                aria-label="Payment method"
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+                <SelectValue placeholder="Payment" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any payment</SelectItem>
+                {PAYMENT_METHODS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+                <SelectItem value="unspecified">Not set</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="h-9 w-[170px]">
+              <SelectTrigger className="bg-card shadow-soft w-full gap-2 sm:w-[170px]">
                 <SortAsc className="h-3.5 w-3.5" />
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
@@ -575,24 +655,62 @@ export default function ExpensesPage() {
               </SelectContent>
             </Select>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant={selectionMode ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => {
-                setSelectionMode((prev) => !prev);
-                setSelectedExpenses([]);
-              }}
-            >
-              <CheckSquare className="h-4 w-4" />
-              {selectionMode ? "Done" : "Select"}
-            </Button>
+        <div className="scrollbar-thin -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {[{ value: "all", label: "All" }, ...categories].map((c: ExpenseCategoryType) => {
+            const active = categoryFilter === c.value;
+            return (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => setCategoryFilter(c.value)}
+                className={cn(
+                  "relative shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
+                  active
+                    ? "text-primary-foreground"
+                    : "bg-card text-muted-foreground hover:text-foreground shadow-soft",
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="category-chip"
+                    transition={spring}
+                    className="bg-primary absolute inset-0 rounded-full"
+                  />
+                )}
+                <span className="relative">{c.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 pb-3">
+          <div>
+            <CardTitle>Transactions</CardTitle>
+            <CardDescription className="mt-1.5">
+              {totalFilteredCount > 0
+                ? `${Math.min(filteredExpenses.length, ITEMS_PER_PAGE)} of ${totalFilteredCount}`
+                : "No expenses found"}
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {selectionMode && totalFilteredCount > 0 && (
+              <label className="text-muted-foreground flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={selectedExpenses.length === totalFilteredCount}
+                  onChange={handleSelectAll}
+                />
+                All
+              </label>
+            )}
             {selectionMode && selectedExpenses.length > 0 && (
               <>
                 <Badge variant="secondary">{selectedExpenses.length} selected</Badge>
                 <Select onValueChange={handleBulkCategoryChange}>
-                  <SelectTrigger className="h-9 w-[180px]">
+                  <SelectTrigger className="h-9 w-[170px]">
                     <SelectValue placeholder="Change category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -609,65 +727,85 @@ export default function ExpensesPage() {
                 </Button>
               </>
             )}
-            <div className="bg-muted flex items-center rounded-md p-0.5">
-              <Button
-                variant={viewMode === "list" ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("list")}
-                className="h-7 px-2"
-              >
-                <List className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant={viewMode === "grid" ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("grid")}
-                className="h-7 px-2"
-              >
-                <Grid3X3 className="h-3.5 w-3.5" />
-              </Button>
+            <Button
+              variant={selectionMode ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setSelectionMode((prev) => !prev);
+                setSelectedExpenses([]);
+              }}
+            >
+              <CheckSquare className="h-4 w-4" />
+              {selectionMode ? "Done" : "Select"}
+            </Button>
+            <div className="bg-muted flex items-center rounded-full p-1">
+              {(
+                [
+                  { mode: "list", icon: List, label: "List view" },
+                  { mode: "grid", icon: Grid3X3, label: "Grid view" },
+                ] as const
+              ).map(({ mode, icon: Icon, label }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-label={label}
+                  onClick={() => setViewMode(mode)}
+                  className={cn(
+                    "relative rounded-full px-2.5 py-1.5 transition-colors",
+                    viewMode === mode ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {viewMode === mode && (
+                    <motion.span
+                      layoutId="view-mode"
+                      transition={spring}
+                      className="bg-card shadow-soft absolute inset-0 rounded-full"
+                    />
+                  )}
+                  <Icon className="relative h-3.5 w-3.5" />
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-          <div>
-            <CardTitle>Transactions</CardTitle>
-            <CardDescription className="mt-1">
-              {totalFilteredCount > 0
-                ? `${Math.min(filteredExpenses.length, ITEMS_PER_PAGE)} of ${totalFilteredCount}`
-                : "No expenses found"}
-            </CardDescription>
-          </div>
-          {selectionMode && totalFilteredCount > 0 && (
-            <label className="text-muted-foreground flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={selectedExpenses.length === totalFilteredCount}
-                onChange={handleSelectAll}
-              />
-              Select all
-            </label>
-          )}
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="px-3 pt-0 sm:px-4">
           {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+            <div className="space-y-3 px-2 pb-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="h-11 w-11 rounded-2xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3.5 w-1/3" />
+                    <Skeleton className="h-3 w-1/5" />
+                  </div>
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
             </div>
           ) : filteredExpenses.length > 0 ? (
-            <div className="px-6 pb-6">
+            <div className="pb-3">
               <ExpenseList
                 expenses={filteredExpenses}
                 onEdit={handleEditExpense}
                 onDelete={handleDeleteClick}
+                onDuplicate={(e) =>
+                  setDuplicateSource({
+                    amount: e.amount,
+                    category: e.category,
+                    description: e.description,
+                    location: e.location,
+                    tags: e.tags,
+                    paymentMethod: e.paymentMethod,
+                  })
+                }
                 selectedExpenses={selectedExpenses}
                 onToggleSelection={selectionMode ? toggleExpenseSelection : undefined}
                 viewMode={viewMode}
+                sortable={false}
+                groupByDay={sortBy.startsWith("date")}
               />
               {totalFilteredCount > ITEMS_PER_PAGE && (
-                <div className="border-border mt-6 flex items-center justify-between border-t pt-4">
+                <div className="border-border mx-2 mt-6 flex items-center justify-between border-t pt-4">
                   <p className="text-muted-foreground text-sm">
                     Page {currentPage} of {totalPages}
                   </p>
@@ -692,36 +830,32 @@ export default function ExpensesPage() {
                 </div>
               )}
             </div>
+          ) : searchTerm ||
+            categoryFilter !== "all" ||
+            paymentFilter !== "all" ||
+            dateFilter !== "all" ? (
+            <EmptyState
+              icon={<Search />}
+              image="/illustrations/empty-search.png"
+              title="Nothing matches"
+              description="Try a different search or clear your filters."
+              actionLabel="Clear filters"
+              onAction={() => {
+                setSearchTerm("");
+                setCategoryFilter("all");
+                setPaymentFilter("all");
+                setDateFilter("all");
+              }}
+            />
           ) : (
-            <div className="flex flex-col items-center px-6 py-16 text-center">
-              <div className="bg-muted mb-4 rounded-full p-4">
-                <Wallet className="text-muted-foreground h-6 w-6" />
-              </div>
-              <h3 className="text-base font-semibold">No expenses found</h3>
-              <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-                {searchTerm || categoryFilter !== "all" || dateFilter !== "all"
-                  ? "Try adjusting your filters."
-                  : "Add your first expense to start tracking."}
-              </p>
-              <div className="mt-5 flex gap-2">
-                <Button onClick={() => setIsAddDialogOpen(true)}>
-                  <Plus className="h-4 w-4" />
-                  Add expense
-                </Button>
-                {(searchTerm || categoryFilter !== "all" || dateFilter !== "all") && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSearchTerm("");
-                      setCategoryFilter("all");
-                      setDateFilter("all");
-                    }}
-                  >
-                    Clear filters
-                  </Button>
-                )}
-              </div>
-            </div>
+            <EmptyState
+              icon={<Wallet />}
+              image="/illustrations/empty-expenses.png"
+              title="No expenses yet"
+              description="Add your first expense or scan a receipt to start tracking."
+              actionLabel="Add expense"
+              onAction={() => setIsAddDialogOpen(true)}
+            />
           )}
         </CardContent>
       </Card>
@@ -730,6 +864,27 @@ export default function ExpensesPage() {
         open={isAddDialogOpen}
         onOpenChange={setIsAddDialogOpen}
         onSave={handleAddExpense}
+      />
+
+      <ExpenseDialog
+        open={!!duplicateSource}
+        onOpenChange={(open) => !open && setDuplicateSource(null)}
+        onSave={async (data) => {
+          await handleAddExpense(data);
+          setDuplicateSource(null);
+        }}
+        initialValues={duplicateSource ?? undefined}
+      />
+
+      <RecurringDialog open={isRecurringOpen} onOpenChange={setIsRecurringOpen} />
+
+      <ImportCsvDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        userId={user?.uid}
+        categories={categories.map((c) => c.value)}
+        existing={allExpenses}
+        onImported={() => refetch()}
       />
 
       {editingExpense && (
@@ -764,6 +919,7 @@ export default function ExpensesPage() {
         onOpenChange={setIsReviewDialogOpen}
         expenses={detectedExpenses}
         receiptImages={scannedReceipts}
+        existing={allExpenses}
         onSave={handleSaveMultipleExpenses}
         onCancel={() => {
           setIsReviewDialogOpen(false);

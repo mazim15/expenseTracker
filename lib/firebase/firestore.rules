@@ -36,7 +36,10 @@ service cloud.firestore {
               && data.date is timestamp
               && data.date <= request.time
               && (!('location' in data) || (data.location is string && data.location.size() <= 200))
-              && (!('tags' in data) || (data.tags is list && data.tags.size() <= 10));
+              && (!('tags' in data) || (data.tags is list && data.tags.size() <= 10))
+              && (!('paymentMethod' in data) || data.paymentMethod in ['cash', 'card', 'bank', 'wallet'])
+              && (!('recurringId' in data) || (data.recurringId is string && data.recurringId.size() <= 100))
+              && (!('receiptPath' in data) || (data.receiptPath is string && data.receiptPath.size() <= 300));
         }
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) && validExpense(request.resource.data);
@@ -44,6 +47,28 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
       
+      // Recurring expense rules (rent, subscriptions…). The app creates the actual
+      // expenses from these when they fall due.
+      match /recurring/{ruleId} {
+        function validRule(data) {
+          return data.amount is number
+              && data.amount > 0
+              && data.amount <= 1000000
+              && data.category is string
+              && data.category.size() > 0
+              && data.category.size() <= 50
+              && data.description is string
+              && data.description.size() > 0
+              && data.description.size() <= 500
+              && data.frequency in ['weekly', 'monthly']
+              && data.startDate is timestamp
+              && data.nextDue is timestamp
+              && data.active is bool;
+        }
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validRule(request.resource.data);
+      }
+
       // Settings subcollection - added for categories
       match /settings/{settingId} {
         allow read, write: if isOwner(userId);

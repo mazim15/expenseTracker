@@ -43,7 +43,7 @@ export default function QrHandoffView({ url, expiresAt, onBack }: QrHandoffViewP
 
   return (
     <div className="flex flex-col items-center gap-4 py-4">
-      <div className="bg-background rounded-lg border p-4">
+      <div className="shadow-soft rounded-3xl border bg-white p-4">
         <QRCodeSVG value={url} size={200} level="M" />
       </div>
 
@@ -57,7 +57,7 @@ export default function QrHandoffView({ url, expiresAt, onBack }: QrHandoffViewP
       <button
         type="button"
         onClick={handleCopy}
-        className="bg-muted hover:bg-muted/80 text-muted-foreground flex max-w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors"
+        className="bg-muted hover:bg-muted/80 text-muted-foreground flex max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs transition-colors"
       >
         <span className="truncate font-mono">{url}</span>
         {copied ? (

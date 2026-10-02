@@ -41,9 +41,9 @@ export default function ResetPassword() {
   };
 
   return (
-    <Card>
+    <Card className="shadow-lift p-2 sm:p-3">
       <CardHeader className="space-y-1.5">
-        <CardTitle className="text-xl">Reset password</CardTitle>
+        <CardTitle className="text-2xl font-extrabold">Reset password</CardTitle>
         <CardDescription>Enter your email and we&apos;ll send you a reset link.</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>

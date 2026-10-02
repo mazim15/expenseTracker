@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
-import { Wallet, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
+import { BrandLogo } from "./Brand";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -33,35 +34,30 @@ export function MarketingHeader() {
   }, [pathname]);
 
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-40 w-full transition-colors",
-        scrolled
-          ? "bg-background/80 border-border border-b backdrop-blur-md"
-          : "bg-background/60 border-b border-transparent backdrop-blur-sm",
-      )}
-    >
-      <div className="container mx-auto flex h-14 items-center gap-6 px-4">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="bg-primary/10 flex h-8 w-8 items-center justify-center rounded-md">
-            <Wallet className="text-primary h-4 w-4" />
-          </div>
-          <span className="text-sm font-semibold tracking-tight">ExpenseTracker</span>
+    <header className="sticky top-0 z-40 w-full px-3 pt-3">
+      <div
+        className={cn(
+          "mx-auto flex h-14 max-w-6xl items-center gap-6 rounded-full px-3 pl-4 transition-all duration-300",
+          scrolled ? "glassmorphism shadow-lift" : "border border-transparent",
+        )}
+      >
+        <Link href="/">
+          <BrandLogo />
         </Link>
 
-        <nav className="hidden items-center gap-6 md:flex">
+        <nav className="hidden items-center gap-1 md:flex">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors"
             >
               {item.label}
             </Link>
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5">
           <ThemeToggle />
 
           {user ? (
@@ -92,13 +88,13 @@ export function MarketingHeader() {
       </div>
 
       {mobileOpen && (
-        <div className="bg-background border-border border-t md:hidden">
-          <div className="container mx-auto flex flex-col gap-1 px-4 py-3">
+        <div className="glassmorphism shadow-lift animate-scale-in mx-auto mt-2 max-w-6xl rounded-3xl md:hidden">
+          <div className="flex flex-col gap-1 p-3">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="hover:bg-accent rounded-md px-3 py-2 text-sm"
+                className="hover:bg-accent rounded-2xl px-3 py-2.5 text-sm font-semibold"
               >
                 {item.label}
               </Link>

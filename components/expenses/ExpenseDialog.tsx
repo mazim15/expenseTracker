@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useForm, Controller } from "react-hook-form";
 import { format } from "date-fns";
-import { Loader2, Plus, ScanLine, X } from "lucide-react";
+import { AlertTriangle, Loader2, Plus, Repeat, ScanLine, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -26,20 +26,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ExpenseType, EXPENSE_CATEGORIES, ExpenseCategoryType } from "@/types/expense";
+import {
+  ExpenseType,
+  EXPENSE_CATEGORIES,
+  ExpenseCategoryType,
+  PAYMENT_METHODS,
+  PaymentMethod,
+  isPaymentMethod,
+} from "@/types/expense";
 import { expenseFormSchema } from "@/lib/validations/expense";
 import CategoryDialog from "./CategoryDialog";
 import ScanReceiptDialog, { ScanReceiptResult } from "./ScanReceiptDialog";
-import { analyzeReceipt } from "@/lib/utils/receiptAnalysis";
+import { analyzeReceipt, formatScanCost, type ScanUsage } from "@/lib/utils/receiptAnalysis";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { getUserCategories } from "@/lib/categories";
 import { useLogger } from "@/lib/hooks/useLogger";
 import { useExpensesQuery } from "@/lib/queries/expenses";
 import { getExpenseGroup, findRelatedExpenses, getLocationArea } from "@/lib/utils/expenseGrouping";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
+import { findLikelyDuplicate } from "@/lib/utils/duplicates";
+import { RECURRING_FREQUENCIES, RecurringFrequency } from "@/lib/utils/recurringSchedule";
+import { useCreateRecurringMutation } from "@/lib/queries/recurring";
+import { runRecurring } from "@/lib/recurring";
+import { deleteReceipt, uploadReceipt } from "@/lib/receipts";
 
 type ExpenseDialogProps = {
   expense?: ExpenseType;
+  /** Prefills a new expense (e.g. "Duplicate"). Ignored when `expense` is set. */
+  initialValues?: Partial<ExpenseType>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (expense: ExpenseType) => void;
@@ -52,20 +66,43 @@ type FormValues = {
   description: string;
   location: string;
   tags: string[];
+  paymentMethod: PaymentMethod | "";
 };
 
-function defaultValues(expense?: ExpenseType): FormValues {
+const LAST_PAYMENT_KEY = "lastPaymentMethod";
+
+function lastPaymentMethod(): PaymentMethod | "" {
+  if (typeof window === "undefined") return "";
+  try {
+    const v = localStorage.getItem(LAST_PAYMENT_KEY);
+    return isPaymentMethod(v) ? v : "";
+  } catch {
+    return "";
+  }
+}
+
+function defaultValues(expense?: ExpenseType, initial?: Partial<ExpenseType>): FormValues {
+  const src = expense ?? initial;
   return {
-    amount: expense ? expense.amount : "",
+    amount: src?.amount ?? "",
     date: expense ? format(expense.date, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
-    category: expense?.category ?? "food",
-    description: expense?.description ?? "",
-    location: expense?.location ?? "",
-    tags: expense?.tags ?? [],
+    category: src?.category ?? "food",
+    description: src?.description ?? "",
+    location: src?.location ?? "",
+    tags: src?.tags ?? [],
+    paymentMethod: expense
+      ? (expense.paymentMethod ?? "")
+      : (src?.paymentMethod ?? lastPaymentMethod()),
   };
 }
 
-export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: ExpenseDialogProps) {
+export default function ExpenseDialog({
+  expense,
+  initialValues,
+  open,
+  onOpenChange,
+  onSave,
+}: ExpenseDialogProps) {
   const { user } = useAuth();
   const { logAction, logError } = useLogger();
   const expensesQuery = useExpensesQuery(user?.uid);
@@ -103,19 +140,27 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
   const [receiptImages, setReceiptImages] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [tagInput, setTagInput] = useState("");
+  const [repeat, setRepeat] = useState<RecurringFrequency | "never">("never");
+  const [duplicateOf, setDuplicateOf] = useState<ExpenseType | null>(null);
+  // A ref, not state: "Save anyway" re-submits immediately and must see the new value.
+  const allowDuplicate = useRef(false);
+  const createRecurring = useCreateRecurringMutation(user?.uid);
 
   const form = useForm<FormValues>({
-    defaultValues: defaultValues(expense),
+    defaultValues: defaultValues(expense, initialValues),
     mode: "onBlur",
   });
 
   useEffect(() => {
     if (open) {
-      form.reset(defaultValues(expense));
+      form.reset(defaultValues(expense, initialValues));
       setReceiptImages([]);
       setTagInput("");
+      setRepeat("never");
+      setDuplicateOf(null);
+      allowDuplicate.current = false;
     }
-  }, [open, expense, form]);
+  }, [open, expense, initialValues, form]);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -188,7 +233,11 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
       setReceiptImages(images.map((i) => i.dataUrl));
       setIsAnalyzing(true);
       toast.loading("Analyzing receipt...");
-      const extracted = await analyzeReceipt(images, { knownTags });
+      let scanCost: ScanUsage | null = null;
+      const extracted = await analyzeReceipt(images, {
+        knownTags,
+        onUsage: (u) => (scanCost = u),
+      });
       if (extracted.amount) form.setValue("amount", extracted.amount);
       if (extracted.date) form.setValue("date", format(extracted.date, "yyyy-MM-dd"));
       if (extracted.category) form.setValue("category", extracted.category);
@@ -208,7 +257,11 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
         form.setValue("tags", merged, { shouldDirty: true });
       }
       toast.dismiss();
-      toast.success("Receipt analyzed");
+      toast.success("Receipt analyzed", {
+        description: scanCost
+          ? `Scan cost ${formatScanCost((scanCost as ScanUsage).costUsd)}`
+          : undefined,
+      });
       setScanDialogOpen(false);
       if (!extracted.location) {
         toast.info("No location detected — add it manually if you'd like.");
@@ -234,6 +287,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
       description: values.description,
       location: values.location,
       tags: values.tags,
+      paymentMethod: values.paymentMethod || undefined,
     });
 
     if (!parsed.success) {
@@ -246,6 +300,27 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
       return;
     }
 
+    // Warn once about a likely duplicate when adding; "Save anyway" sets allowDuplicate.
+    if (!expense && !allowDuplicate.current) {
+      const dup = findLikelyDuplicate(parsed.data, expensesQuery.data ?? []);
+      if (dup) {
+        setDuplicateOf(dup);
+        return;
+      }
+    }
+
+    let receiptPath = expense?.receiptPath;
+    if (receiptImages.length > 0 && user?.uid) {
+      try {
+        receiptPath = await uploadReceipt(user.uid, receiptImages[0]);
+        // Replacing a receipt on edit: drop the old photo
+        if (expense?.receiptPath) void deleteReceipt(expense.receiptPath);
+      } catch (err) {
+        console.error("Receipt upload failed:", err);
+        toast.warning("Expense saved, but the receipt photo couldn't be kept.");
+      }
+    }
+
     const payload: ExpenseType = {
       id: expense?.id || crypto.randomUUID(),
       userId: expense?.userId || user?.uid || "",
@@ -255,12 +330,42 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
       description: parsed.data.description,
       location: parsed.data.location || "",
       tags: parsed.data.tags,
+      ...(parsed.data.paymentMethod && { paymentMethod: parsed.data.paymentMethod }),
+      ...(receiptPath && { receiptPath }),
+      ...(expense?.recurringId && { recurringId: expense.recurringId }),
       createdAt: expense?.createdAt ?? new Date(),
       updatedAt: new Date(),
     };
 
     try {
       await onSave(payload);
+      if (payload.paymentMethod) {
+        try {
+          localStorage.setItem(LAST_PAYMENT_KEY, payload.paymentMethod);
+        } catch {
+          // storage unavailable — default just won't be remembered
+        }
+      }
+      if (!expense && repeat !== "never" && user?.uid) {
+        await createRecurring.mutateAsync({
+          rule: {
+            amount: payload.amount,
+            category: payload.category,
+            description: payload.description,
+            tags: payload.tags,
+            location: payload.location || undefined,
+            paymentMethod: payload.paymentMethod,
+            frequency: repeat,
+            startDate: payload.date,
+            active: true,
+          },
+          firstAlreadySaved: true,
+        });
+        // A back-dated start may already have missed occurrences — fill them in now.
+        const added = await runRecurring(user.uid);
+        if (added.length > 0) toast.info(`Added ${added.length} earlier repeat(s) of this expense`);
+        toast.success(`Repeats ${repeat}`);
+      }
       await logAction(expense ? "expense_updated" : "expense_created", {
         expenseId: payload.id,
         amount: payload.amount,
@@ -282,8 +387,8 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] max-w-md flex-col overflow-hidden p-0">
-        <DialogHeader className="bg-primary text-primary-foreground flex-shrink-0 p-3">
-          <DialogTitle className="text-lg font-semibold">
+        <DialogHeader className="bg-hero flex-shrink-0 px-5 py-4">
+          <DialogTitle className="text-lg font-bold">
             {expense ? "Edit Expense" : "Add New Expense"}
           </DialogTitle>
         </DialogHeader>
@@ -304,7 +409,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                           step="0.01"
                           min="0"
                           placeholder="0.00"
-                          className="h-9"
+                          className="h-10"
                           value={field.value === "" ? "" : field.value}
                           onChange={(e) => {
                             const v = e.target.value;
@@ -327,7 +432,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                     <FormItem>
                       <FormLabel className="text-xs">Date</FormLabel>
                       <FormControl>
-                        <Input type="date" className="h-9" {...field} />
+                        <Input type="date" className="h-10" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -342,7 +447,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                   <FormItem>
                     <FormLabel className="text-xs">Description</FormLabel>
                     <FormControl>
-                      <Input placeholder="What did you spend on?" className="h-9" {...field} />
+                      <Input placeholder="What did you spend on?" className="h-10" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -358,7 +463,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                     <div className="flex gap-2">
                       <FormControl>
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="h-9 flex-1">
+                          <SelectTrigger className="h-10 flex-1">
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                           <SelectContent>
@@ -374,7 +479,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-9 w-9 shrink-0"
+                        className="h-10 w-10 shrink-0"
                         onClick={() => setCategoryDialogOpen(true)}
                       >
                         <Plus className="h-3 w-3" />
@@ -394,7 +499,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                     <FormControl>
                       <Input
                         placeholder="Enter location"
-                        className="h-9"
+                        className="h-10"
                         maxLength={200}
                         {...field}
                       />
@@ -403,6 +508,66 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="paymentMethod"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Paid with</FormLabel>
+                    <div
+                      className="bg-muted/60 grid grid-cols-4 gap-1 rounded-xl p-1"
+                      role="radiogroup"
+                    >
+                      {PAYMENT_METHODS.map((m) => {
+                        const active = field.value === m.value;
+                        return (
+                          <button
+                            key={m.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            onClick={() => field.onChange(active ? "" : m.value)}
+                            className={cn(
+                              "rounded-lg px-1 py-1.5 text-xs font-semibold transition-colors",
+                              active
+                                ? "bg-card text-foreground shadow-soft"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            {m.value === "bank" ? "Bank" : m.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              {!expense && (
+                <div className="space-y-2">
+                  <span className="flex items-center gap-1.5 text-xs font-medium">
+                    <Repeat className="h-3.5 w-3.5" />
+                    Repeats
+                  </span>
+                  <Select
+                    value={repeat}
+                    onValueChange={(v) => setRepeat(v as RecurringFrequency | "never")}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="never">Never</SelectItem>
+                      {RECURRING_FREQUENCIES.map((f) => (
+                        <SelectItem key={f.value} value={f.value}>
+                          {f.label} — added automatically
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <Controller
                 control={form.control}
@@ -442,7 +607,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                           }
                         }}
                         placeholder="Add tags (press Enter)"
-                        className="h-9 flex-1"
+                        className="h-10 flex-1"
                         maxLength={30}
                         disabled={tags.length >= 10}
                       />
@@ -450,7 +615,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-9 w-9"
+                        className="h-10 w-10"
                         onClick={() => addTag()}
                         disabled={tags.length >= 10}
                       >
@@ -482,7 +647,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                 )}
               />
 
-              <div className="rounded-md border border-dashed p-3">
+              <div className="border-primary/30 bg-primary/5 rounded-2xl border-2 border-dashed p-4">
                 <span className="mb-2 block text-xs font-medium">Receipt (optional)</span>
                 {receiptImages.length > 0 ? (
                   <div className="space-y-1">
@@ -531,7 +696,7 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
               </div>
 
               {purchaseHistory && (
-                <div className="bg-muted/30 rounded-md border p-3">
+                <div className="bg-muted/50 rounded-2xl p-3">
                   <p className="text-xs font-medium">
                     {purchaseHistory.group?.label} · {purchaseHistory.items.length} times ·{" "}
                     {formatCurrency(purchaseHistory.total)} total
@@ -562,11 +727,45 @@ export default function ExpenseDialog({ expense, open, onOpenChange, onSave }: E
                 </div>
               )}
 
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 w-full disabled:opacity-50"
-              >
+              {duplicateOf && (
+                <div
+                  role="alert"
+                  className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+                >
+                  <p className="flex items-center gap-2 font-semibold">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    Looks like a duplicate
+                  </p>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    You already have &ldquo;{duplicateOf.description}&rdquo; for{" "}
+                    {formatCurrency(duplicateOf.amount)} on {format(duplicateOf.date, "d MMM yyyy")}
+                    .
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        allowDuplicate.current = true;
+                        setDuplicateOf(null);
+                        onSubmit();
+                      }}
+                    >
+                      Save anyway
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <Button type="submit" disabled={isSubmitting} className="h-11 w-full">
                 {isSubmitting ? "Saving..." : expense ? "Save Changes" : "Add Expense"}
               </Button>
             </form>

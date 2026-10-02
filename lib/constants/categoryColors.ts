@@ -1,15 +1,15 @@
-// Centralized category color mappings
+// Centralized category color mappings (soft pastel chips that work in light and dark)
 export const CATEGORY_COLORS = {
-  food: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300",
-  housing: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-  transportation: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-  utilities: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-  entertainment: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300",
-  healthcare: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
-  shopping: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-  education: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300",
-  personal: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300",
-  other: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+  food: "border-transparent bg-orange-500/12 text-orange-700 dark:text-orange-300",
+  housing: "border-transparent bg-sky-500/12 text-sky-700 dark:text-sky-300",
+  transportation: "border-transparent bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
+  utilities: "border-transparent bg-violet-500/12 text-violet-700 dark:text-violet-300",
+  entertainment: "border-transparent bg-pink-500/12 text-pink-700 dark:text-pink-300",
+  healthcare: "border-transparent bg-rose-500/12 text-rose-700 dark:text-rose-300",
+  shopping: "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  education: "border-transparent bg-indigo-500/12 text-indigo-700 dark:text-indigo-300",
+  personal: "border-transparent bg-teal-500/12 text-teal-700 dark:text-teal-300",
+  other: "border-transparent bg-slate-500/12 text-slate-700 dark:text-slate-300",
 } as const;
 
 export type CategoryColorKey = keyof typeof CATEGORY_COLORS;
@@ -18,16 +18,16 @@ export function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category as CategoryColorKey] || CATEGORY_COLORS.other;
 }
 
-// Chart colors for pie charts and other visualizations
+// Chart colors for pie charts and other visualizations, harmonized with the emerald/lime theme
 export const CHART_COLORS = [
-  "#0088FE",
-  "#00C49F",
-  "#FFBB28",
-  "#FF8042",
-  "#8884D8",
-  "#FF6B6B",
-  "#6B8E23",
-  "#483D8B",
-  "#CD853F",
-  "#708090",
+  "#10B981",
+  "#A3E635",
+  "#F59E0B",
+  "#FB7185",
+  "#A78BFA",
+  "#14B8A6",
+  "#38BDF8",
+  "#FB923C",
+  "#F472B6",
+  "#94A3B8",
 ] as const;

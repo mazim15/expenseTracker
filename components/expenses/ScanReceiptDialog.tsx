@@ -261,16 +261,16 @@ export default function ScanReceiptDialog({
             onDragOver={onDragOver}
             onDrop={onDrop}
             className={cn(
-              "flex flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors",
+              "flex flex-col items-center justify-center rounded-3xl border-2 border-dashed px-6 py-10 text-center transition-all duration-300",
               isDragging
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-muted-foreground/50",
+                ? "border-primary bg-primary/10 scale-[1.01]"
+                : "border-primary/25 bg-primary/5 hover:border-primary/50",
             )}
           >
-            <div className="bg-muted mb-3 rounded-full p-3">
-              <ImageIcon className="text-muted-foreground h-5 w-5" />
+            <div className="bg-hero shadow-lift mb-4 rounded-2xl p-4">
+              <ImageIcon className="h-6 w-6" />
             </div>
-            <p className="text-sm font-medium">Drag and drop receipt images</p>
+            <p className="text-base font-bold">Drop your receipts here</p>
             <p className="text-muted-foreground mt-1 text-xs">
               JPEG, PNG, WebP, or HEIC · up to 10MB each · {MAX_IMAGES} max
             </p>
@@ -319,7 +319,7 @@ export default function ScanReceiptDialog({
               {images.map((img, index) => (
                 <div
                   key={`${img.name}-${index}`}
-                  className="bg-muted relative overflow-hidden rounded-md border"
+                  className="bg-muted relative overflow-hidden rounded-2xl"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -327,6 +327,12 @@ export default function ScanReceiptDialog({
                     alt={`Receipt ${index + 1}`}
                     className="h-32 w-full object-cover"
                   />
+                  {isAnalyzing && (
+                    <>
+                      <div className="bg-primary/15 absolute inset-0" />
+                      <div className="animate-scan bg-highlight absolute inset-x-0 h-0.5 shadow-[0_0_16px_4px_var(--highlight)]" />
+                    </>
+                  )}
                   {!isAnalyzing && (
                     <Button
                       type="button"
@@ -401,7 +407,7 @@ export default function ScanReceiptDialog({
         />
 
         {error && (
-          <div className="border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
+          <div className="border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-2xl border px-3 py-2 text-sm">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>

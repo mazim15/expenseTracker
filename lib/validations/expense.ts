@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const paymentMethodSchema = z.enum(["cash", "card", "bank", "wallet"]);
+
 export const expenseSchema = z.object({
   id: z.string().optional(),
   userId: z.string().min(1, "User ID is required"),
@@ -12,6 +14,9 @@ export const expenseSchema = z.object({
   date: z.date().max(new Date(), "Date cannot be in the future"),
   tags: z.array(z.string().min(1).max(30)).max(10).optional(),
   location: z.string().max(200).optional(),
+  paymentMethod: paymentMethodSchema.optional(),
+  recurringId: z.string().max(100).optional(),
+  receiptPath: z.string().max(300).optional(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
 });
@@ -39,6 +44,7 @@ export const expenseFormSchema = z.object({
     .max(500, "Description must be less than 500 characters"),
   location: z.string().max(200).optional().or(z.literal("")),
   tags: z.array(z.string().min(1).max(30)).max(10).default([]),
+  paymentMethod: paymentMethodSchema.optional(),
 });
 
 export type Expense = z.infer<typeof expenseSchema> & {

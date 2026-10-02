@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { AppShell } from "@/components/layout/AppShell";
+import { BrandLoader } from "@/components/layout/Brand";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -16,11 +17,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [user, loading, router]);
 
   if (loading) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <div className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
-      </div>
-    );
+    return <BrandLoader />;
   }
 
   if (!user) {

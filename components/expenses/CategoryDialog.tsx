@@ -112,7 +112,7 @@ export default function CategoryDialog({
               {categories.map((category: ExpenseCategoryType) => (
                 <div
                   key={category.value}
-                  className="bg-muted flex items-center justify-between rounded-md p-2"
+                  className="bg-muted flex items-center justify-between rounded-xl p-2.5"
                 >
                   <span>{category.label}</span>
                   {/* Don't allow removing the "other" category */}

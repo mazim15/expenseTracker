@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 interface UserSettings {
   currency: string;
   notifications: boolean;
+  /** @deprecated theme is handled by next-themes; kept so stored settings still parse */
   darkMode: boolean;
 }
 
@@ -36,15 +37,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
     }
   }, []);
-
-  // Apply dark mode when settings change
-  useEffect(() => {
-    if (settings.darkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [settings.darkMode]);
 
   const updateSettings = (newSettings: Partial<UserSettings>) => {
     const updatedSettings = { ...settings, ...newSettings };

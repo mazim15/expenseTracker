@@ -9,6 +9,9 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   updateProfile,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { logAuth, setLoggerUser, clearLoggerUser } from "@/lib/logging";
@@ -33,6 +36,7 @@ type AuthContextType = {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateUser: (profileData: UserProfileUpdate) => Promise<boolean>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -165,9 +169,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Firebase requires a recent sign-in to change the password, so re-check the current one first.
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    const current = auth.currentUser;
+    if (!current?.email) throw new Error("No user logged in");
+    try {
+      await reauthenticateWithCredential(
+        current,
+        EmailAuthProvider.credential(current.email, currentPassword),
+      );
+      await updatePassword(current, newPassword);
+      await logAuth("password_changed", true, { userId: current.uid });
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        throw new Error("Your current password is incorrect.");
+      }
+      if (code === "auth/too-many-requests") {
+        throw new Error("Too many attempts. Please wait a few minutes and try again.");
+      }
+      if (code === "auth/weak-password") {
+        throw new Error("Choose a stronger password (at least 8 characters).");
+      }
+      throw new Error("Couldn't change your password. Please try again.");
+    }
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, signUp, signIn, signOut, resetPassword, updateUser }}
+      value={{ user, loading, signUp, signIn, signOut, resetPassword, updateUser, changePassword }}
     >
       {children}
     </AuthContext.Provider>

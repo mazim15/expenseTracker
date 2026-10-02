@@ -1,6 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useTheme } from "next-themes";
+import { toast } from "sonner";
+import { changePasswordSchema, type ChangePasswordInput } from "@/lib/validations/auth";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { useSettings } from "@/lib/contexts/SettingsContext";
 import { User } from "firebase/auth";
@@ -17,9 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { AlertCircle, Check } from "lucide-react";
+import { AlertCircle, Bell, Check, Coins, Moon, type LucideIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface UserProfileUpdate {
@@ -30,6 +34,7 @@ interface UserProfileUpdate {
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
   const { settings, updateSettings } = useSettings();
+  const { resolvedTheme, setTheme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -70,24 +75,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSettingsUpdate = async () => {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      setError("");
-      setSuccess("");
-
-      setSuccess("Settings updated successfully");
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (err: Error | unknown) {
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const userInitials = displayName
     ? displayName
         .split(" ")
@@ -97,17 +84,25 @@ export default function SettingsPage() {
     : "U";
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-8">
-      <div className="flex flex-col space-y-6">
-        <div className="from-primary/10 flex flex-col items-start justify-between gap-4 rounded-lg bg-gradient-to-r to-transparent p-6 sm:flex-row sm:items-center">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-            <p className="text-muted-foreground">Manage your account and preferences</p>
+    <div className="mx-auto max-w-3xl px-4 py-4 lg:px-8 lg:py-2">
+      <div className="flex flex-col space-y-5">
+        <div className="bg-hero shadow-lift relative flex items-center gap-4 overflow-hidden rounded-3xl p-6">
+          <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+          <Avatar className="h-16 w-16 ring-4 ring-white/25">
+            <AvatarFallback className="bg-white/20 text-2xl font-bold text-inherit">
+              {userInitials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="relative min-w-0">
+            <p className="truncate text-xl font-extrabold tracking-tight">
+              {displayName || email.split("@")[0]}
+            </p>
+            <p className="truncate text-sm opacity-80">{email}</p>
           </div>
         </div>
 
         <Tabs defaultValue="profile" className="space-y-4">
-          <TabsList>
+          <TabsList className="grid w-full grid-cols-3 sm:inline-grid sm:w-auto">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
@@ -128,26 +123,15 @@ export default function SettingsPage() {
                 )}
 
                 {success && (
-                  <Alert className="mb-4 border-green-500 text-green-700">
+                  <Alert className="border-success/40 bg-success/10 text-success mb-4 rounded-2xl">
                     <Check className="h-4 w-4" />
                     <AlertDescription>{success}</AlertDescription>
                   </Alert>
                 )}
 
                 <form onSubmit={handleProfileUpdate} className="space-y-4">
-                  <div className="flex flex-col items-start gap-8 md:flex-row">
-                    <div className="flex flex-col items-center space-y-2">
-                      <Avatar className="h-24 w-24">
-                        <AvatarFallback className="bg-primary/10 text-primary text-2xl">
-                          {userInitials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <Button variant="outline" size="sm" className="mt-2">
-                        Change Avatar
-                      </Button>
-                    </div>
-
-                    <div className="flex-1 space-y-4">
+                  <div>
+                    <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="displayName">Display Name</Label>
                         <Input
@@ -159,7 +143,7 @@ export default function SettingsPage() {
 
                       <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" value={email} disabled className="bg-muted" />
+                        <Input id="email" value={email} disabled />
                         <p className="text-muted-foreground text-sm">
                           Your email cannot be changed
                         </p>
@@ -181,23 +165,28 @@ export default function SettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Preferences</CardTitle>
-                <CardDescription>Customize your experience</CardDescription>
+                <CardDescription>Changes are saved automatically</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-2">
                 {success && (
-                  <Alert className="mb-4 border-green-500 text-green-700">
+                  <Alert className="border-success/40 bg-success/10 text-success mb-4 rounded-2xl">
                     <Check className="h-4 w-4" />
                     <AlertDescription>{success}</AlertDescription>
                   </Alert>
                 )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="currency">Currency</Label>
+                <SettingRow
+                  icon={Coins}
+                  tone="bg-highlight/40 text-highlight-foreground"
+                  label="Currency"
+                  htmlFor="currency"
+                  description="Used for every amount in the app"
+                >
                   <Select
                     value={settings.currency}
                     onValueChange={(value) => updateSettings({ currency: value })}
                   >
-                    <SelectTrigger id="currency">
+                    <SelectTrigger id="currency" className="w-[190px]">
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
@@ -209,79 +198,141 @@ export default function SettingsPage() {
                       <SelectItem value="CAD">Canadian Dollar (C$)</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </SettingRow>
 
-                <Separator />
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="notifications">Notifications</Label>
-                    <p className="text-muted-foreground text-sm">
-                      Receive notifications about your expenses and budgets
-                    </p>
-                  </div>
+                <SettingRow
+                  icon={Bell}
+                  tone="bg-orange-500/12 text-orange-600 dark:text-orange-300"
+                  label="Notifications"
+                  htmlFor="notifications"
+                  description="Spending alerts and recurring-expense updates in the bell"
+                >
                   <Switch
                     id="notifications"
                     checked={settings.notifications}
                     onCheckedChange={(checked) => updateSettings({ notifications: checked })}
                   />
-                </div>
+                </SettingRow>
 
-                <Separator />
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="darkMode">Dark Mode</Label>
-                    <p className="text-muted-foreground text-sm">
-                      Use dark theme for the application
-                    </p>
-                  </div>
+                <SettingRow
+                  icon={Moon}
+                  tone="bg-violet-500/12 text-violet-600 dark:text-violet-300"
+                  label="Dark Mode"
+                  htmlFor="darkMode"
+                  description="Use dark theme for the application"
+                >
                   <Switch
                     id="darkMode"
-                    checked={settings.darkMode}
-                    onCheckedChange={(checked) => updateSettings({ darkMode: checked })}
+                    checked={resolvedTheme === "dark"}
+                    onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
                   />
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={handleSettingsUpdate} disabled={loading}>
-                    {loading ? "Saving..." : "Save Preferences"}
-                  </Button>
-                </div>
+                </SettingRow>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="security" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Security</CardTitle>
-                <CardDescription>Manage your account security</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input id="currentPassword" type="password" />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="newPassword">New Password</Label>
-                  <Input id="newPassword" type="password" />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <Input id="confirmPassword" type="password" />
-                </div>
-
-                <div className="flex justify-end">
-                  <Button>Change Password</Button>
-                </div>
-              </CardContent>
-            </Card>
+            <ChangePasswordCard />
           </TabsContent>
         </Tabs>
       </div>
     </div>
+  );
+}
+
+function SettingRow({
+  icon: Icon,
+  tone,
+  label,
+  htmlFor,
+  description,
+  children,
+}: {
+  icon: LucideIcon;
+  tone: string;
+  label: string;
+  htmlFor: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="hover:bg-muted/50 -mx-3 flex flex-wrap items-center gap-4 rounded-2xl p-3 transition-colors">
+      <span
+        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <Label htmlFor={htmlFor} className="font-semibold">
+          {label}
+        </Label>
+        <p className="text-muted-foreground text-sm">{description}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ChangePasswordCard() {
+  const { changePassword } = useAuth();
+  const [error, setError] = useState("");
+  const form = useForm<ChangePasswordInput>({
+    resolver: zodResolver(changePasswordSchema),
+    defaultValues: { currentPassword: "", newPassword: "", confirmNewPassword: "" },
+  });
+  const { errors, isSubmitting } = form.formState;
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    setError("");
+    try {
+      await changePassword(values.currentPassword, values.newPassword);
+      form.reset();
+      toast.success("Password changed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't change your password.");
+    }
+  });
+
+  const field = (name: keyof ChangePasswordInput, label: string, autoComplete: string) => (
+    <div className="space-y-2">
+      <Label htmlFor={name}>{label}</Label>
+      <Input
+        id={name}
+        type="password"
+        autoComplete={autoComplete}
+        aria-invalid={!!errors[name]}
+        {...form.register(name)}
+      />
+      {errors[name] && <p className="text-destructive text-xs">{errors[name]?.message}</p>}
+    </div>
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Change password</CardTitle>
+        <CardDescription>
+          At least 8 characters with upper and lower case letters, a number and a symbol.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="space-y-4" noValidate>
+          {error && (
+            <Alert variant="destructive" className="rounded-2xl">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {field("currentPassword", "Current password", "current-password")}
+          {field("newPassword", "New password", "new-password")}
+          {field("confirmNewPassword", "Confirm new password", "new-password")}
+          <div className="flex justify-end">
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Changing…" : "Change password"}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

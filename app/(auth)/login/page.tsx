@@ -75,9 +75,9 @@ export default function Login() {
   };
 
   return (
-    <Card>
+    <Card className="shadow-lift p-2 sm:p-3">
       <CardHeader className="space-y-1.5">
-        <CardTitle className="text-xl">Welcome back</CardTitle>
+        <CardTitle className="text-2xl font-extrabold">Welcome back</CardTitle>
         <CardDescription>Sign in to your account to continue.</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>

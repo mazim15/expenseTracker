@@ -52,9 +52,9 @@ export default function Register() {
   };
 
   return (
-    <Card>
+    <Card className="shadow-lift p-2 sm:p-3">
       <CardHeader className="space-y-1.5">
-        <CardTitle className="text-xl">Create your account</CardTitle>
+        <CardTitle className="text-2xl font-extrabold">Create your account</CardTitle>
         <CardDescription>Start tracking your expenses in under two minutes.</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>

@@ -1,14 +1,6 @@
 import { ExpenseType, ExpenseCategory, EXPENSE_CATEGORIES } from "@/types/expense";
-
-const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-const API_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-
-if (!API_KEY) {
-  console.error(
-    "Missing Gemini API key. Make sure NEXT_PUBLIC_GEMINI_API_KEY is set in .env.local file.",
-  );
-}
+import { auth } from "@/lib/firebase";
+import { compressImage } from "@/lib/receipts";
 
 interface ExtractedReceiptData {
   merchant?: string;
@@ -26,8 +18,23 @@ const MAX_DESCRIPTION_LENGTH = 480;
 const MAX_PAST_DAYS = 365;
 const MAX_FUTURE_DAYS = 7;
 
+export interface ScanUsage {
+  model: string | null;
+  /** What OpenRouter charged for this scan, in USD (null if not reported). */
+  costUsd: number | null;
+  tokens: number;
+}
+
 export interface AnalyzeReceiptOptions {
   knownTags?: string[];
+  /** Called with the model, token count and cost of the scan once the model has answered. */
+  onUsage?: (usage: ScanUsage) => void;
+}
+
+/** "$0.0012" — scan costs are fractions of a cent, so show 4 significant digits. */
+export function formatScanCost(usd: number | null): string {
+  if (usd === null) return "cost unavailable";
+  return `$${usd < 0.01 ? usd.toPrecision(2) : usd.toFixed(3)}`;
 }
 
 export interface ReceiptImageInput {
@@ -52,6 +59,12 @@ const SUPPORTED_MIMES = new Set([
 ]);
 
 const UNREADABLE_RECEIPT_ERROR = "Could not read receipt. Try a clearer photo.";
+
+/** The original data URL, relabelled with a supported MIME type when the browser left it blank. */
+function withMime(img: ReceiptImageInput): string {
+  const mime = resolveMimeType(img.dataUrl, img.mimeType);
+  return img.dataUrl.replace(/^data:[^;]*;base64,/, `data:${mime};base64,`);
+}
 
 function resolveMimeType(imageData: string, explicitMime?: string): string {
   if (explicitMime && SUPPORTED_MIMES.has(explicitMime)) return explicitMime;
@@ -172,122 +185,71 @@ function clampDate(parsed: Date | null): Date {
 }
 
 /**
- * Analyzes one or more images of a single receipt using Gemini and returns one aggregated expense.
- * When multiple images are passed, they are treated as different parts/pages of the SAME receipt
- * (e.g. a long receipt photographed in sections) and combined into one result.
+ * Analyzes one or more images of a single receipt and returns one aggregated expense.
+ * The images go to our `/api/scan-receipt` route, which asks a vision model on OpenRouter
+ * to read them (the API key stays on the server). When multiple images are passed they are
+ * treated as parts/pages of the SAME receipt and combined into one result.
  * Throws if the receipt can't be parsed into a usable expense.
  */
 export async function analyzeReceipt(
   images: ReceiptImageInput[],
   options: AnalyzeReceiptOptions = {},
 ): Promise<Partial<ExpenseType>> {
-  if (!API_KEY) {
-    throw new Error("Missing Gemini API key");
-  }
-
   if (!Array.isArray(images) || images.length === 0) {
     throw new Error("No receipt images provided");
   }
-
-  const imageParts = images.map((img) => {
+  for (const img of images) {
     if (!img?.dataUrl || !img.dataUrl.includes("base64")) {
       throw new Error("Invalid image data");
     }
-    const base64Data = img.dataUrl.split(",")[1] || img.dataUrl;
-    return {
-      inline_data: {
-        mime_type: resolveMimeType(img.dataUrl, img.mimeType),
-        data: base64Data,
-      },
-    };
-  });
-
-  const knownTagsList = (options.knownTags ?? [])
-    .map((t) => t.trim())
-    .filter(Boolean)
-    .slice(0, 50);
-
-  const knownTagsBlock = knownTagsList.length
-    ? `\n\nThe user has previously used these tags: ${knownTagsList.join(", ")}. Prefer reusing these tags when they apply. You may also add up to 2 new tags if clearly warranted.`
-    : "\n\nThe user has no prior tags yet. Suggest up to 3 concise tags based on the receipt.";
-
-  const multiImageNote =
-    images.length > 1
-      ? `\n\nIMPORTANT: ${images.length} images are provided. They are different parts of the SAME receipt (e.g. a long receipt photographed in sections, front/back, or overlapping segments). Combine all visible line items into a single result and avoid double-counting items that appear in overlapping regions across images. The total should reflect the receipt as a whole.`
-      : "";
-
-  const prompt = `Analyze the receipt image(s) and extract the receipt's contents.${multiImageNote}
-
-Return ONLY a JSON object (no prose, no markdown, no code fences) in this exact shape:
-{
-  "merchant": "store name",
-  "date": "YYYY-MM-DD",
-  "items": [
-    { "name": "item name", "price": 0.00, "quantity": 1, "category": "food" }
-  ],
-  "subtotal": 0.00,
-  "discount": 0.00,
-  "fees": 0.00,
-  "total": 0.00,
-  "location": "street address or city if printed on the receipt, otherwise empty string",
-  "tags": ["tag1", "tag2"]
-}
-
-Rules:
-- "total" MUST be a number representing the FINAL amount the customer paid. This is the grand total AFTER subtracting all discounts, vouchers, coupons, promo codes, loyalty rewards, and credits, AND adding any taxes, tips, fees, delivery charges, or service charges. Use the printed grand total when available.
-- "discount" is the sum of all reductions (voucher, coupon, promo, loyalty, etc.) as a positive number. Use 0 if none.
-- "fees" is the sum of all additions (tax, tip, delivery, service charge, etc.) as a positive number. Use 0 if none.
-- "subtotal" is the pre-discount, pre-fee sum of items. Use 0 if not printed.
-- If the printed total is missing, compute it as: subtotal - discount + fees (or sum(items) - discount + fees).
-- "price" and all money fields are numbers with up to 2 decimal places. No currency symbols.
-- "quantity" is an integer, default 1 if not shown.
-- If no line items are visible, return items: [] but still provide total and merchant.
-- category should be one of: food, entertainment, transport, shopping, utilities, health, travel, other.
-- "date" must be the printed PURCHASE / ORDER / TRANSACTION date in YYYY-MM-DD. Do NOT use phone clock, status bar time, expiry dates, "best before" dates, order IDs, or any number that is not clearly a transaction date. If no purchase date is clearly printed, return an empty string.
-- "location" should only be populated if the receipt clearly shows an address or city. Otherwise use an empty string.
-- "tags" should contain 1-5 short lowercase tags (single words or short phrases, each ≤ 30 chars).${knownTagsBlock}`;
-
-  const requestBody = {
-    contents: [
-      {
-        parts: [{ text: prompt }, ...imageParts],
-      },
-    ],
-    generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 8192,
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-  };
-
-  const response = await fetch(`${API_URL}?key=${API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Gemini API error (${response.status}):`, errorText);
-    throw new Error(`Receipt analysis failed (${response.status})`);
   }
 
-  const result = await response.json();
-  const candidate = result?.candidates?.[0];
-  const finishReason: string | undefined = candidate?.finishReason;
-  const textContent: string | undefined = candidate?.content?.parts?.[0]?.text;
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error("Please sign in again to scan receipts.");
+
+  // Downscale before upload: phone photos are often 5–10 MB, far over what the server accepts.
+  // Formats the browser can't decode (e.g. HEIC outside Safari) are sent as-is.
+  const prepared = await Promise.all(
+    images.map(async (img) => ({
+      dataUrl: await compressImage(img.dataUrl).catch(() => withMime(img)),
+    })),
+  );
+
+  const response = await fetch("/api/scan-receipt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      images: prepared,
+      knownTags: (options.knownTags ?? []).slice(0, 50),
+      categories: EXPENSE_CATEGORIES.map((c) => c.value),
+    }),
+  });
+
+  const result = (await response.json().catch(() => ({}))) as {
+    text?: string;
+    finishReason?: string | null;
+    error?: string;
+    model?: string | null;
+    costUsd?: number | null;
+    tokens?: number;
+  };
+  if (!response.ok) {
+    throw new Error(result.error || `Receipt analysis failed (${response.status})`);
+  }
+  options.onUsage?.({
+    model: result.model ?? null,
+    costUsd: result.costUsd ?? null,
+    tokens: result.tokens ?? 0,
+  });
+
+  const finishReason = result.finishReason ?? undefined;
+  const textContent = result.text;
 
   if (!textContent) {
-    console.error("Invalid Gemini response structure:", {
-      finishReason,
-      promptFeedback: result?.promptFeedback,
-      result,
-    });
-    if (finishReason === "MAX_TOKENS") {
+    if (finishReason === "length") {
       throw new Error("Receipt is too long — try fewer or smaller images.");
     }
-    if (finishReason === "SAFETY" || finishReason === "RECITATION") {
+    if (finishReason === "content_filter") {
       throw new Error("Receipt was blocked by content filters. Try a different image.");
     }
     throw new Error(UNREADABLE_RECEIPT_ERROR);
@@ -296,7 +258,7 @@ Rules:
   const extractedData = parseReceiptJson(textContent);
   if (!extractedData) {
     console.error("Receipt JSON parse failed.", { finishReason, rawText: textContent });
-    if (finishReason === "MAX_TOKENS") {
+    if (finishReason === "length") {
       throw new Error("Receipt is too long — try fewer or smaller images.");
     }
     throw new Error(UNREADABLE_RECEIPT_ERROR);
@@ -304,7 +266,7 @@ Rules:
 
   const items = Array.isArray(extractedData.items) ? extractedData.items : [];
 
-  const totalFromGemini = toNumber(extractedData.total);
+  const totalFromModel = toNumber(extractedData.total);
   const discount = Math.max(0, toNumber(extractedData.discount) || 0);
   const fees = Math.max(0, toNumber(extractedData.fees) || 0);
   const summed = items.reduce((acc, item) => {
@@ -313,16 +275,16 @@ Rules:
     return Number.isFinite(price) ? acc + price * qty : acc;
   }, 0);
 
-  // Prefer Gemini's printed total when it already accounts for discount/fees; otherwise
+  // Prefer the model's printed total when it already accounts for discount/fees; otherwise
   // derive it from items (sum - discount + fees). Sanity-check by reconciling against the
-  // computed value — if Gemini's total ignores a voucher we extracted, fall back to the
+  // computed value — if the model's total ignores a voucher we extracted, fall back to the
   // adjusted value.
   const computed = summed - discount + fees;
   let amount: number;
-  if (Number.isFinite(totalFromGemini) && totalFromGemini > 0) {
-    const offBy = Math.abs(totalFromGemini - computed);
-    const ignoresDiscount = discount > 0 && Math.abs(totalFromGemini - (computed + discount)) < 0.5;
-    amount = ignoresDiscount && offBy > 0.5 ? computed : totalFromGemini;
+  if (Number.isFinite(totalFromModel) && totalFromModel > 0) {
+    const offBy = Math.abs(totalFromModel - computed);
+    const ignoresDiscount = discount > 0 && Math.abs(totalFromModel - (computed + discount)) < 0.5;
+    amount = ignoresDiscount && offBy > 0.5 ? computed : totalFromModel;
   } else {
     amount = computed > 0 ? computed : summed;
   }

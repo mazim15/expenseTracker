@@ -1,4 +1,4 @@
-import { ExpenseType, ExpenseCategory } from "@/types/expense";
+import { ExpenseType, ExpenseCategory, isPaymentMethod } from "@/types/expense";
 
 // Type guard for ExpenseType
 export function isExpenseType(obj: unknown): obj is ExpenseType {
@@ -59,6 +59,9 @@ export function transformFirebaseExpense(
         ? data.tags.filter((tag: unknown) => typeof tag === "string")
         : [],
       location: typeof data.location === "string" ? data.location : "",
+      ...(isPaymentMethod(data.paymentMethod) && { paymentMethod: data.paymentMethod }),
+      ...(typeof data.recurringId === "string" && { recurringId: data.recurringId }),
+      ...(typeof data.receiptPath === "string" && { receiptPath: data.receiptPath }),
       createdAt:
         data.createdAt &&
         typeof data.createdAt === "object" &&

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
- 
+
 import { NextRequest } from "next/server";
 import { logger } from "./index";
 

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusScreen } from "@/components/layout/StatusScreen";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 export default function Error({
@@ -17,43 +17,32 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="bg-destructive/10 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
-            <AlertTriangle className="text-destructive h-6 w-6" />
-          </div>
-          <CardTitle>Something went wrong!</CardTitle>
-          <CardDescription>
-            An unexpected error occurred. Please try again or contact support if the problem
-            persists.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {process.env.NODE_ENV === "development" && (
-            <details className="rounded border p-3 text-sm">
-              <summary className="cursor-pointer font-medium">Error Details</summary>
-              <pre className="mt-2 text-xs whitespace-pre-wrap">{error.message}</pre>
-              {error.digest && (
-                <p className="text-muted-foreground mt-1 text-xs">Error ID: {error.digest}</p>
-              )}
-            </details>
+    <StatusScreen
+      image="/illustrations/error.png"
+      fallbackIcon={<AlertTriangle />}
+      title="Something went wrong!"
+      description="An unexpected error occurred. Please try again or contact support if the problem persists."
+      actions={
+        <>
+          <Button onClick={reset}>
+            <RefreshCw className="h-4 w-4" />
+            Try again
+          </Button>
+          <Button variant="outline" onClick={() => (window.location.href = "/")}>
+            Go home
+          </Button>
+        </>
+      }
+    >
+      {process.env.NODE_ENV === "development" && (
+        <details className="bg-card rounded-2xl border p-3 text-left text-sm">
+          <summary className="cursor-pointer font-medium">Error Details</summary>
+          <pre className="mt-2 text-xs whitespace-pre-wrap">{error.message}</pre>
+          {error.digest && (
+            <p className="text-muted-foreground mt-1 text-xs">Error ID: {error.digest}</p>
           )}
-          <div className="flex gap-2">
-            <Button onClick={reset} className="flex-1">
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Try again
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => (window.location.href = "/")}
-              className="flex-1"
-            >
-              Go home
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+        </details>
+      )}
+    </StatusScreen>
   );
 }
