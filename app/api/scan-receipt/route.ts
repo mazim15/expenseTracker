@@ -49,7 +49,7 @@ Return ONLY a JSON object (no prose, no markdown, no code fences) in this exact 
   "merchant": "store name",
   "date": "YYYY-MM-DD",
   "items": [
-    { "name": "item name", "price": 0.00, "quantity": 1, "category": "food" }
+    { "name": "item name", "price": 0.00, "quantity": 1, "category": "food", "brand": "" }
   ],
   "subtotal": 0.00,
   "discount": 0.00,
@@ -67,6 +67,7 @@ Rules:
 - If the printed total is missing, compute it as: subtotal - discount + fees (or sum(items) - discount + fees).
 - "price" and all money fields are numbers with up to 2 decimal places. No currency symbols.
 - "quantity" is an integer, default 1 if not shown.
+- "brand" is the item's product brand when the line names one (e.g. "Dettol" for "DETTOL SOAP 110G"), otherwise an empty string. Do not use the store's own name as the brand.
 - If no line items are visible, return items: [] but still provide total and merchant.
 - category must be one of: ${categoryList}.
 - "date" must be the printed PURCHASE / ORDER / TRANSACTION date in YYYY-MM-DD. Do NOT use phone clock, status bar time, expiry dates, "best before" dates, order IDs, or any number that is not clearly a transaction date. If no purchase date is clearly printed, return an empty string.

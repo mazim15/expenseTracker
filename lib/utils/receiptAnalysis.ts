@@ -2,6 +2,7 @@ import { ExpenseType, ExpenseCategory, EXPENSE_CATEGORIES, ReceiptItem } from "@
 import { auth } from "@/lib/firebase";
 import { compressImage } from "@/lib/receipts";
 import { recordAiUsage } from "@/lib/aiUsage";
+import { uniqueNames } from "@/lib/utils/enrichment";
 
 interface ExtractedReceiptData {
   merchant?: string;
@@ -48,6 +49,7 @@ interface ExtractedReceiptItem {
   price: number | string;
   category?: string;
   quantity?: number;
+  brand?: string;
 }
 
 const DEFAULT_MIME = "image/jpeg";
@@ -148,6 +150,8 @@ function toReceiptItems(items: ExtractedReceiptItem[]): ReceiptItem[] {
           price,
           quantity,
           ...(typeof item.category === "string" && item.category && { category: item.category }),
+          ...(typeof item.brand === "string" &&
+            item.brand.trim() && { brand: item.brand.trim().slice(0, 100) }),
         },
       ];
     })
@@ -321,6 +325,8 @@ export async function analyzeReceipt(
   const date = clampDate(parsedDate);
 
   const location = typeof extractedData.location === "string" ? extractedData.location.trim() : "";
+  const receiptItems = toReceiptItems(items);
+  const brands = uniqueNames(receiptItems.map((i) => i.brand));
   const merchant =
     typeof extractedData.merchant === "string" ? extractedData.merchant.trim().slice(0, 100) : "";
 
@@ -348,7 +354,8 @@ export async function analyzeReceipt(
     location,
     tags,
     ...(merchant && { merchant }),
-    items: toReceiptItems(items),
+    items: receiptItems,
+    ...(brands.length && { brands }),
     receiptTotals: {
       subtotal: Math.max(0, toNumber(extractedData.subtotal) || 0),
       discount,

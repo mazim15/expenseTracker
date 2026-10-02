@@ -55,9 +55,19 @@ function parseReceiptItems(raw: unknown[]): ReceiptItem[] {
         price: i.price,
         quantity: typeof i.quantity === "number" ? i.quantity : 1,
         ...(typeof i.category === "string" && { category: i.category }),
+        ...(typeof i.brand === "string" && i.brand && { brand: i.brand }),
       },
     ];
   });
+}
+
+/** `brands`, or the single `brand` that early enriched expenses were saved with. */
+function parseBrands(data: Record<string, unknown>): string[] | undefined {
+  if (Array.isArray(data.brands)) {
+    const brands = data.brands.filter((b): b is string => typeof b === "string" && !!b);
+    return brands.length ? brands : undefined;
+  }
+  return typeof data.brand === "string" && data.brand ? [data.brand] : undefined;
 }
 
 function isReceiptTotals(value: unknown): value is ReceiptTotals {
@@ -102,7 +112,7 @@ export function transformFirebaseExpense(
       ...(typeof data.recurringId === "string" && { recurringId: data.recurringId }),
       ...(typeof data.receiptPath === "string" && { receiptPath: data.receiptPath }),
       ...(typeof data.merchant === "string" && data.merchant && { merchant: data.merchant }),
-      ...(typeof data.brand === "string" && data.brand && { brand: data.brand }),
+      ...(parseBrands(data) && { brands: parseBrands(data) }),
       ...(Array.isArray(data.items) && { items: parseReceiptItems(data.items) }),
       ...(isReceiptTotals(data.receiptTotals) && { receiptTotals: data.receiptTotals }),
       ...(typeof data.receiptId === "string" && { receiptId: data.receiptId }),

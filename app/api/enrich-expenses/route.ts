@@ -1,5 +1,5 @@
 // Expense enrichment, server-side: reads expense descriptions/locations and asks a text model
-// on OpenRouter for the merchant and brand, so related expenses can be linked. Text-only, so
+// on OpenRouter for the merchant and brands, so related expenses can be linked. Text-only, so
 // it costs a fraction of a receipt scan (~$0.001 per batch of 25).
 import { NextResponse } from "next/server";
 import { z } from "zod";

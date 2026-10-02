@@ -142,6 +142,17 @@ export default function ExpenseDialog({
     );
   }, [expense, expensesQuery.data]);
 
+  // How many of the user's expenses include each brand, so a brand links across receipts
+  const brandCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of expensesQuery.data ?? []) {
+      for (const b of new Set((e.brands ?? []).map((x) => x.toLowerCase()))) {
+        counts.set(b, (counts.get(b) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [expensesQuery.data]);
+
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
   const [localCategories, setLocalCategories] = useState(EXPENSE_CATEGORIES);
@@ -703,7 +714,7 @@ export default function ExpenseDialog({
                 )}
               </div>
 
-              {expense && (expense.merchant || expense.brand || expense.items?.length) ? (
+              {expense && (expense.merchant || expense.brands?.length || expense.items?.length) ? (
                 <div className="bg-muted/50 space-y-2 rounded-2xl p-3">
                   <div className="flex flex-wrap gap-1.5 text-xs">
                     {expense.merchant && (
@@ -711,11 +722,19 @@ export default function ExpenseDialog({
                         Merchant: <span className="font-medium">{expense.merchant}</span>
                       </span>
                     )}
-                    {expense.brand && (
-                      <span className="bg-background rounded-full border px-2 py-0.5">
-                        Brand: <span className="font-medium">{expense.brand}</span>
-                      </span>
-                    )}
+                    {expense.brands?.map((brand) => {
+                      const count = brandCounts.get(brand.toLowerCase()) ?? 0;
+                      return (
+                        <span
+                          key={brand}
+                          className="bg-background rounded-full border px-2 py-0.5"
+                          title={`${count} of your expenses include ${brand}`}
+                        >
+                          <span className="font-medium">{brand}</span>
+                          {count > 1 && <span className="text-muted-foreground"> · {count}×</span>}
+                        </span>
+                      );
+                    })}
                   </div>
                   {!!expense.items?.length && (
                     <>
@@ -728,6 +747,9 @@ export default function ExpenseDialog({
                             <span className="truncate">
                               {item.quantity > 1 ? `${item.quantity} × ` : ""}
                               {item.name}
+                              {item.brand && (
+                                <span className="text-muted-foreground/70"> · {item.brand}</span>
+                              )}
                             </span>
                             <span className="tabular-nums">{formatCurrency(item.price)}</span>
                           </li>

@@ -12,7 +12,7 @@ function makeExpense(partial: Partial<ExpenseType>): ExpenseType {
     description: partial.description ?? "",
     location: partial.location,
     merchant: partial.merchant,
-    brand: partial.brand,
+    brands: partial.brands,
     tags: partial.tags ?? [],
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -32,7 +32,9 @@ describe("getExpenseGroup", () => {
   });
 
   it("uses the saved brand when there is no merchant", () => {
-    const g = getExpenseGroup(makeExpense({ brand: "Tifal", description: "3 wipes xxl" }));
+    const g = getExpenseGroup(
+      makeExpense({ brands: ["Tifal", "Pampers"], description: "3 wipes xxl" }),
+    );
     expect(g).toEqual({ key: "food:tifal", label: "Tifal" });
   });
 

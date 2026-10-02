@@ -14,7 +14,8 @@ export interface EnrichmentResult {
   id: string;
   /** Empty when the model couldn't tell. */
   merchant: string;
-  brand: string;
+  /** Every product brand named; empty when none. */
+  brands: string[];
 }
 
 export function buildEnrichPrompt(expenses: EnrichmentInput[], knownMerchants: string[]): string {
@@ -28,23 +29,39 @@ export function buildEnrichPrompt(expenses: EnrichmentInput[], knownMerchants: s
     category: e.category,
   }));
 
-  return `For each personal expense below, identify the merchant (the shop, restaurant, company or service paid) and the main product brand bought.${known}
+  return `For each personal expense below, identify the merchant (the shop, restaurant, company or service paid) and every product brand bought.${known}
 
 Expenses (JSON):
 ${JSON.stringify(list)}
 
 Return ONLY a JSON object (no prose, no markdown) in this exact shape:
-{ "results": [ { "id": "same id as input", "merchant": "", "brand": "" } ] }
+{ "results": [ { "id": "same id as input", "merchant": "", "brands": [] } ] }
 
 Rules:
 - One result per input id.
 - "merchant": short common name, e.g. "KFC", "Careem", "Imtiaz". Location text is often "Merchant, Area" — the part before the comma is usually the merchant. Use "" if the expense does not name or clearly imply one.
-- "brand": the product brand when the description names one (e.g. "Tifal" for "tifal xxl, 3 wipes"), else "". Do not repeat the merchant as the brand.
+- "brands": every product brand the description names, one entry each (e.g. ["Tifal"] for "tifal xxl, 3 wipes"; ["Dettol", "Sunsilk"] for "Dettol soap, Sunsilk shampoo"), else []. Do not repeat the merchant as a brand.
 - Never invent names that are not supported by the description or location.`;
 }
 
+const MAX_BRANDS = 20;
+
 function cleanName(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, MAX_NAME_LENGTH) : "";
+}
+
+/** Unique (case-insensitive) non-empty names, first spelling wins. */
+export function uniqueNames(values: unknown[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of values) {
+    const name = cleanName(v);
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out.slice(0, MAX_BRANDS);
 }
 
 function parseJson(text: string): unknown {
@@ -86,10 +103,12 @@ export function parseEnrichResponse(text: string, ids: string[]): EnrichmentResu
   const out: EnrichmentResult[] = [];
   for (const r of results) {
     if (typeof r !== "object" || r === null) continue;
-    const { id, merchant, brand } = r as Record<string, unknown>;
+    const { id, merchant, brands, brand } = r as Record<string, unknown>;
     if (typeof id !== "string" || !wanted.has(id)) continue;
     wanted.delete(id);
-    out.push({ id, merchant: cleanName(merchant), brand: cleanName(brand) });
+    // Tolerate a single "brand" string in case the model answers in that shape
+    const list = Array.isArray(brands) ? brands : [brand];
+    out.push({ id, merchant: cleanName(merchant), brands: uniqueNames(list) });
   }
   return out;
 }

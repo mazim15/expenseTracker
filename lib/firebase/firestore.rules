@@ -42,6 +42,7 @@ service cloud.firestore {
               && (!('receiptPath' in data) || (data.receiptPath is string && data.receiptPath.size() <= 300))
               && (!('merchant' in data) || (data.merchant is string && data.merchant.size() <= 100))
               && (!('brand' in data) || (data.brand is string && data.brand.size() <= 100))
+              && (!('brands' in data) || (data.brands is list && data.brands.size() <= 20))
               && (!('items' in data) || (data.items is list && data.items.size() <= 100))
               && (!('receiptTotals' in data) || data.receiptTotals is map)
               && (!('receiptId' in data) || (data.receiptId is string && data.receiptId.size() <= 100))

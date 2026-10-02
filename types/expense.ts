@@ -19,6 +19,7 @@ export interface ReceiptItem {
   quantity: number;
   price: number;
   category?: string;
+  brand?: string;
 }
 
 export interface ReceiptTotals {
@@ -43,8 +44,8 @@ export interface ExpenseType {
   receiptPath?: string;
   /** Normalized store/merchant name (from a scan or AI enrichment), e.g. "KFC". */
   merchant?: string;
-  /** Main product brand (from AI enrichment), e.g. "Tifal". */
-  brand?: string;
+  /** Product brands bought, e.g. ["Dettol", "Sunsilk"] (a receipt can have many). */
+  brands?: string[];
   /** Line items, when the expense came from a scanned receipt. */
   items?: ReceiptItem[];
   receiptTotals?: ReceiptTotals;

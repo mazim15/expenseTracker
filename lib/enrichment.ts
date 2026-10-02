@@ -53,7 +53,7 @@ async function requestEnrichment(
 }
 
 /**
- * Asks AI for each expense's merchant and brand and saves them with `enrichedAt`.
+ * Asks AI for each expense's merchant and brands and saves them with `enrichedAt`.
  * `knownMerchants` keeps spellings consistent with what the user already has.
  * Calls `onProgress` with the running count of processed (done + skipped) expenses.
  *
@@ -92,7 +92,9 @@ export async function enrichExpenses(
     for (const r of results) {
       batch.update(doc(db, "users", userId, "expenses", r.id), {
         merchant: r.merchant || deleteField(),
-        brand: r.brand || deleteField(),
+        brands: r.brands.length ? r.brands : deleteField(),
+        // Early enriched expenses stored a single brand; `brands` replaces it
+        brand: deleteField(),
         enrichedAt: now,
       });
       if (r.merchant) known.add(r.merchant);
