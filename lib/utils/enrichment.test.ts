@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildEnrichPrompt, parseEnrichResponse } from "./enrichment";
+import { buildEnrichPrompt, knownMerchantNames, parseEnrichResponse } from "./enrichment";
 
 describe("parseEnrichResponse", () => {
   it("keeps results for requested ids and trims names", () => {
@@ -75,5 +75,18 @@ describe("buildEnrichPrompt", () => {
     );
     expect(prompt).toContain("KFC");
     expect(prompt).toContain('"id":"a"');
+  });
+});
+
+describe("knownMerchantNames", () => {
+  it("lists merchants most used first, case-insensitively merged", () => {
+    const names = knownMerchantNames([
+      { merchant: "KFC" },
+      { merchant: "Krave Mart" },
+      { merchant: "kfc" },
+      { merchant: " " },
+      {},
+    ]);
+    expect(names).toEqual(["KFC", "Krave Mart"]);
   });
 });

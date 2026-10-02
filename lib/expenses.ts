@@ -16,6 +16,7 @@ import {
   QueryDocumentSnapshot,
   DocumentData,
   FieldValue,
+  deleteField,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { deleteReceipt } from "@/lib/receipts";
@@ -192,6 +193,14 @@ export async function updateExpense(
       location: expenseData.location,
       paymentMethod: expenseData.paymentMethod,
       receiptPath: expenseData.receiptPath,
+      // An emptied merchant is removed so AI detection can fill it again
+      merchant:
+        expenseData.merchant === undefined ? undefined : expenseData.merchant || deleteField(),
+      // Set when a new receipt was scanned into this expense
+      brands: expenseData.brands,
+      items: expenseData.items,
+      receiptTotals: expenseData.receiptTotals,
+      enrichedAt: expenseData.enrichedAt,
       updatedAt: Timestamp.fromDate(new Date()),
     };
 
@@ -224,6 +233,7 @@ export async function updateExpense(
       enrichInBackground(userId, [
         {
           id: expenseId,
+          merchant: expenseData.merchant ?? before.merchant,
           description: expenseData.description ?? before.description,
           location: expenseData.location ?? before.location,
           category: expenseData.category ?? before.category,

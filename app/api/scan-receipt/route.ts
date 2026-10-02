@@ -23,13 +23,19 @@ const Body = z.object({
     }),
   knownTags: z.array(z.string().max(30)).max(50).default([]),
   categories: z.array(z.string().min(1).max(50)).max(50).default([]),
+  knownMerchants: z.array(z.string().min(1).max(100)).max(100).default([]),
 });
 
 function error(status: number, message: string) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function buildPrompt(imageCount: number, knownTags: string[], categories: string[]) {
+function buildPrompt(
+  imageCount: number,
+  knownTags: string[],
+  categories: string[],
+  knownMerchants: string[],
+) {
   const tags = knownTags.map((t) => t.trim()).filter(Boolean);
   const knownTagsBlock = tags.length
     ? `\n\nThe user has previously used these tags: ${tags.join(", ")}. Prefer reusing these tags when they apply. You may also add up to 2 new tags if clearly warranted.`
@@ -38,6 +44,11 @@ function buildPrompt(imageCount: number, knownTags: string[], categories: string
     imageCount > 1
       ? `\n\nIMPORTANT: ${imageCount} images are provided. They are different parts of the SAME receipt (e.g. a long receipt photographed in sections, front/back, or overlapping segments). Combine all visible line items into a single result and avoid double-counting items that appear in overlapping regions across images. The total should reflect the receipt as a whole.`
       : "";
+  // Order screenshots often don't print the store name; without the user's own merchants the
+  // model confidently guesses a wrong one (e.g. "Pandamart" for a Krave Mart order).
+  const merchantsBlock = knownMerchants.length
+    ? ` The user has bought from these merchants before: ${knownMerchants.join(", ")}. If this receipt is from one of them, return that exact name.`
+    : "";
   const categoryList = categories.length
     ? categories.join(", ")
     : "food, transportation, shopping, utilities, healthcare, entertainment, other";
@@ -71,7 +82,8 @@ Rules:
 - If no line items are visible, return items: [] but still provide total and merchant.
 - category must be one of: ${categoryList}.
 - "date" must be the printed PURCHASE / ORDER / TRANSACTION date in YYYY-MM-DD. Do NOT use phone clock, status bar time, expiry dates, "best before" dates, order IDs, or any number that is not clearly a transaction date. If no purchase date is clearly printed, return an empty string.
-- "location" should only be populated if the receipt clearly shows an address or city. Otherwise use an empty string.
+- "merchant" is the store or app the purchase was made with.${merchantsBlock} If you can't tell, use an empty string — a wrong merchant is worse than an empty one.
+- "location" is the store's address or city, only if the receipt clearly shows it; otherwise an empty string. Never use the customer's delivery address.
 - "tags" should contain 1-5 short lowercase tags (single words or short phrases, each ≤ 30 chars).${knownTagsBlock}`;
 }
 
@@ -84,7 +96,7 @@ export async function POST(req: Request) {
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return error(400, parsed.error.issues[0]?.message ?? "Invalid request");
-  const { images, knownTags, categories } = parsed.data;
+  const { images, knownTags, categories, knownMerchants } = parsed.data;
 
   let res: Response;
   try {
@@ -107,7 +119,10 @@ export async function POST(req: Request) {
           {
             role: "user",
             content: [
-              { type: "text", text: buildPrompt(images.length, knownTags, categories) },
+              {
+                type: "text",
+                text: buildPrompt(images.length, knownTags, categories, knownMerchants),
+              },
               ...images.map((img) => ({ type: "image_url", image_url: { url: img.dataUrl } })),
             ],
           },

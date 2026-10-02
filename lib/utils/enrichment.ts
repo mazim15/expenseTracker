@@ -5,6 +5,8 @@ const MAX_NAME_LENGTH = 100;
 
 export interface EnrichmentInput {
   id: string;
+  /** A merchant the user typed or confirmed; enrichment keeps it instead of its own guess. */
+  merchant?: string;
   description: string;
   location?: string;
   category: string;
@@ -45,6 +47,23 @@ Rules:
 }
 
 const MAX_BRANDS = 20;
+
+/** The user's merchant names, most used first, to keep AI spellings consistent with theirs. */
+export function knownMerchantNames(expenses: { merchant?: string }[], limit = 100): string[] {
+  const counts = new Map<string, { name: string; count: number }>();
+  for (const e of expenses) {
+    const name = e.merchant?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const entry = counts.get(key) ?? { name, count: 0 };
+    entry.count += 1;
+    counts.set(key, entry);
+  }
+  return [...counts.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit)
+    .map((e) => e.name);
+}
 
 function cleanName(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, MAX_NAME_LENGTH) : "";

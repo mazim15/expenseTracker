@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { useExpensesQuery } from "@/lib/queries/expenses";
 import { listAiUsage } from "@/lib/aiUsage";
 import { enrichExpenses } from "@/lib/enrichment";
+import { knownMerchantNames } from "@/lib/utils/enrichment";
 import {
   AI_FEATURE_LABELS,
   AiFeature,
@@ -109,9 +110,7 @@ export default function AiUsagePage() {
     setBackfillError(null);
     setBackfillResult(null);
     setBackfill({ done: 0, total: unenriched.length });
-    const knownMerchants = [
-      ...new Set((expensesQuery.data ?? []).map((e) => e.merchant).filter(Boolean)),
-    ] as string[];
+    const knownMerchants = knownMerchantNames(expensesQuery.data ?? []);
     try {
       const { done, skipped } = await enrichExpenses(
         user.uid,

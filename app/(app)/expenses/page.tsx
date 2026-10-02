@@ -65,6 +65,7 @@ import { toast } from "sonner";
 import ReceiptReviewDialog from "@/components/expenses/ReceiptReviewDialog";
 import ScanReceiptDialog, { type ScanReceiptResult } from "@/components/expenses/ScanReceiptDialog";
 import { analyzeReceipt, formatScanCost, type ScanUsage } from "@/lib/utils/receiptAnalysis";
+import { knownMerchantNames } from "@/lib/utils/enrichment";
 import { getUserCategories } from "@/lib/categories";
 import { uploadReceipt } from "@/lib/receipts";
 import RecurringDialog from "@/components/expenses/RecurringDialog";
@@ -405,6 +406,7 @@ export default function ExpensesPage() {
       let scanCost: ScanUsage | null = null;
       const extracted = await analyzeReceipt(images, {
         knownTags,
+        knownMerchants: knownMerchantNames(allExpenses),
         onUsage: (u) => (scanCost = u),
       });
 

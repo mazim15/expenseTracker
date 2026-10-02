@@ -45,6 +45,7 @@ import { useExpensesQuery } from "@/lib/queries/expenses";
 import { getExpenseGroup, findRelatedExpenses, getLocationArea } from "@/lib/utils/expenseGrouping";
 import { cn, formatCurrency } from "@/lib/utils";
 import { findLikelyDuplicate } from "@/lib/utils/duplicates";
+import { knownMerchantNames } from "@/lib/utils/enrichment";
 import { RECURRING_FREQUENCIES, RecurringFrequency } from "@/lib/utils/recurringSchedule";
 import { useCreateRecurringMutation } from "@/lib/queries/recurring";
 import { runRecurring } from "@/lib/recurring";
@@ -65,9 +66,13 @@ type FormValues = {
   category: string;
   description: string;
   location: string;
+  merchant: string;
   tags: string[];
   paymentMethod: PaymentMethod | "";
 };
+
+/** What a receipt scanned inside this dialog adds beyond the visible form fields. */
+type ScanDetails = Pick<ExpenseType, "items" | "receiptTotals" | "brands" | "enrichedAt">;
 
 const LAST_PAYMENT_KEY = "lastPaymentMethod";
 
@@ -89,6 +94,7 @@ function defaultValues(expense?: ExpenseType, initial?: Partial<ExpenseType>): F
     category: src?.category ?? "food",
     description: src?.description ?? "",
     location: src?.location ?? "",
+    merchant: src?.merchant ?? "",
     tags: src?.tags ?? [],
     paymentMethod: expense
       ? (expense.paymentMethod ?? "")
@@ -157,6 +163,7 @@ export default function ExpenseDialog({
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
   const [localCategories, setLocalCategories] = useState(EXPENSE_CATEGORIES);
   const [receiptImages, setReceiptImages] = useState<string[]>([]);
+  const [scanDetails, setScanDetails] = useState<ScanDetails | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [repeat, setRepeat] = useState<RecurringFrequency | "never">("never");
@@ -174,6 +181,7 @@ export default function ExpenseDialog({
     if (open) {
       form.reset(defaultValues(expense, initialValues));
       setReceiptImages([]);
+      setScanDetails(null);
       setTagInput("");
       setRepeat("never");
       setDuplicateOf(null);
@@ -255,6 +263,7 @@ export default function ExpenseDialog({
       let scanCost: ScanUsage | null = null;
       const extracted = await analyzeReceipt(images, {
         knownTags,
+        knownMerchants: knownMerchantNames(expensesQuery.data ?? []),
         onUsage: (u) => (scanCost = u),
       });
       if (extracted.amount) form.setValue("amount", extracted.amount);
@@ -262,6 +271,13 @@ export default function ExpenseDialog({
       if (extracted.category) form.setValue("category", extracted.category);
       if (extracted.description) form.setValue("description", extracted.description);
       if (extracted.location) form.setValue("location", extracted.location);
+      form.setValue("merchant", extracted.merchant ?? "");
+      setScanDetails({
+        items: extracted.items,
+        receiptTotals: extracted.receiptTotals,
+        brands: extracted.brands,
+        enrichedAt: extracted.enrichedAt,
+      });
       if (extracted.tags && extracted.tags.length > 0) {
         const existing = form.getValues("tags");
         const merged: string[] = [...existing];
@@ -293,6 +309,7 @@ export default function ExpenseDialog({
         mimeTypes,
       });
       setReceiptImages([]);
+      setScanDetails(null);
     } finally {
       setIsAnalyzing(false);
     }
@@ -305,6 +322,7 @@ export default function ExpenseDialog({
       category: values.category,
       description: values.description,
       location: values.location,
+      merchant: values.merchant.trim(),
       tags: values.tags,
       paymentMethod: values.paymentMethod || undefined,
     });
@@ -348,10 +366,14 @@ export default function ExpenseDialog({
       category: parsed.data.category,
       description: parsed.data.description,
       location: parsed.data.location || "",
+      // Empty on edit clears it (and lets AI detect it again); omitted on add
+      ...((expense || parsed.data.merchant) && { merchant: parsed.data.merchant || "" }),
       tags: parsed.data.tags,
       ...(parsed.data.paymentMethod && { paymentMethod: parsed.data.paymentMethod }),
       ...(receiptPath && { receiptPath }),
       ...(expense?.recurringId && { recurringId: expense.recurringId }),
+      // Only when a receipt was scanned in this dialog (and still attached)
+      ...(receiptImages.length > 0 && scanDetails),
       createdAt: expense?.createdAt ?? new Date(),
       updatedAt: new Date(),
     };
@@ -530,6 +552,31 @@ export default function ExpenseDialog({
 
               <FormField
                 control={form.control}
+                name="merchant"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Merchant (optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Store or app, e.g. Krave Mart — detected automatically if empty"
+                        className="h-10"
+                        maxLength={100}
+                        list="known-merchants"
+                        {...field}
+                      />
+                    </FormControl>
+                    <datalist id="known-merchants">
+                      {knownMerchantNames(expensesQuery.data ?? []).map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="paymentMethod"
                 render={({ field }) => (
                   <FormItem>
@@ -687,7 +734,10 @@ export default function ExpenseDialog({
                       variant="outline"
                       size="sm"
                       className="mt-1 h-7 w-full text-xs"
-                      onClick={() => setReceiptImages([])}
+                      onClick={() => {
+                        setReceiptImages([]);
+                        setScanDetails(null);
+                      }}
                       disabled={isAnalyzing}
                     >
                       Remove

@@ -90,8 +90,9 @@ export async function enrichExpenses(
     const batch = writeBatch(db);
     const now = Timestamp.now();
     for (const r of results) {
+      const typed = chunk.find((e) => e.id === r.id)?.merchant?.trim();
       batch.update(doc(db, "users", userId, "expenses", r.id), {
-        merchant: r.merchant || deleteField(),
+        merchant: typed || r.merchant || deleteField(),
         brands: r.brands.length ? r.brands : deleteField(),
         // Early enriched expenses stored a single brand; `brands` replaces it
         brand: deleteField(),

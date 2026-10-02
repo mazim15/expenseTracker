@@ -29,6 +29,8 @@ export interface ScanUsage {
 
 export interface AnalyzeReceiptOptions {
   knownTags?: string[];
+  /** The user's merchant names, so a scan without a printed store name can still match one. */
+  knownMerchants?: string[];
   /** Called with the model, token count and cost of the scan once the model has answered. */
   onUsage?: (usage: ScanUsage) => void;
 }
@@ -247,6 +249,7 @@ export async function analyzeReceipt(
     body: JSON.stringify({
       images: prepared,
       knownTags: (options.knownTags ?? []).slice(0, 50),
+      knownMerchants: (options.knownMerchants ?? []).slice(0, 100),
       categories: EXPENSE_CATEGORIES.map((c) => c.value),
     }),
   });

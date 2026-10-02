@@ -3,12 +3,13 @@
 // it costs a fraction of a receipt scan (~$0.001 per batch of 25).
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { DEFAULT_MODEL, OPENROUTER_URL, userIdFromRequest } from "@/lib/server/openrouter";
+import { DEFAULT_ENRICH_MODEL, OPENROUTER_URL, userIdFromRequest } from "@/lib/server/openrouter";
 import { buildEnrichPrompt, ENRICH_BATCH_SIZE, parseEnrichResponse } from "@/lib/utils/enrichment";
 
 export const runtime = "nodejs";
 
-const MODEL_TIMEOUT_MS = 30_000;
+// The detection model reasons before answering, so allow it more time than a plain reply
+const MODEL_TIMEOUT_MS = 60_000;
 
 const Body = z.object({
   expenses: z
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
         "X-Title": "Expense Tracker",
       },
       body: JSON.stringify({
-        model: process.env.ENRICH_MODEL || DEFAULT_MODEL,
+        model: process.env.ENRICH_MODEL || DEFAULT_ENRICH_MODEL,
         temperature: 0,
         max_tokens: 4096,
         response_format: { type: "json_object" },

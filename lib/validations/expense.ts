@@ -17,6 +17,25 @@ export const expenseSchema = z.object({
   paymentMethod: paymentMethodSchema.optional(),
   recurringId: z.string().max(100).optional(),
   receiptPath: z.string().max(300).optional(),
+  merchant: z.string().max(100).optional(),
+  brands: z.array(z.string().max(100)).max(20).optional(),
+  items: z
+    .array(
+      z.object({
+        name: z.string().max(200),
+        quantity: z.number(),
+        price: z.number(),
+        category: z.string().optional(),
+        brand: z.string().max(100).optional(),
+      }),
+    )
+    .max(100)
+    .optional(),
+  receiptTotals: z
+    .object({ subtotal: z.number(), discount: z.number(), fees: z.number() })
+    .optional(),
+  receiptId: z.string().max(100).optional(),
+  enrichedAt: z.date().optional(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
 });
@@ -43,6 +62,7 @@ export const expenseFormSchema = z.object({
     .min(1, "Description is required")
     .max(500, "Description must be less than 500 characters"),
   location: z.string().max(200).optional().or(z.literal("")),
+  merchant: z.string().max(100).optional().or(z.literal("")),
   tags: z.array(z.string().min(1).max(30)).max(10).default([]),
   paymentMethod: paymentMethodSchema.optional(),
 });

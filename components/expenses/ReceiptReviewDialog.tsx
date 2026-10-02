@@ -214,6 +214,17 @@ export default function ReceiptReviewDialog({
                             )}
                             className={!selectedItems[index] ? "opacity-50" : ""}
                           />
+                          <Input
+                            value={expense.merchant || ""}
+                            onChange={(e) => handleUpdateExpense(index, "merchant", e.target.value)}
+                            placeholder="Merchant (store or app)"
+                            aria-label="Merchant"
+                            maxLength={100}
+                            className={cn(
+                              "mt-1 h-8 text-sm",
+                              !selectedItems[index] && "opacity-50",
+                            )}
+                          />
                           {duplicates[index] && (
                             <p className="mt-1 flex items-center gap-1 text-xs text-amber-600">
                               <AlertTriangle className="h-3 w-3 shrink-0" />
