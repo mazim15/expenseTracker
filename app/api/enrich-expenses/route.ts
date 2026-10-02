@@ -3,7 +3,8 @@
 // it costs a fraction of a receipt scan (~$0.001 per batch of 25).
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { DEFAULT_ENRICH_MODEL, OPENROUTER_URL, userIdFromRequest } from "@/lib/server/openrouter";
+import { userIdFromRequest } from "@/lib/server/auth";
+import { DEFAULT_ENRICH_MODEL, OPENROUTER_URL } from "@/lib/server/openrouter";
 import { buildEnrichPrompt, ENRICH_BATCH_SIZE, parseEnrichResponse } from "@/lib/utils/enrichment";
 
 export const runtime = "nodejs";

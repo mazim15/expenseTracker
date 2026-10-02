@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getReceiptUrl } from "@/lib/receipts";
 
-/** Shows a saved receipt photo from Firebase Storage. */
+/** Shows a saved receipt photo (stored in DigitalOcean Spaces). */
 export function ReceiptViewer({
   path,
   title,

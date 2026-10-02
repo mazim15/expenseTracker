@@ -1,5 +1,4 @@
-import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { storage } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 
 const MAX_SIDE = 1600;
 const QUALITY = 0.8;
@@ -21,36 +20,43 @@ export async function compressImage(dataUrl: string): Promise<string> {
   return (await drawScaled(dataUrl)).toDataURL("image/jpeg", QUALITY);
 }
 
-/** Downscales an image data URL to a JPEG blob (longest side ≤ 1600px). */
-async function compress(dataUrl: string): Promise<Blob> {
-  const canvas = await drawScaled(dataUrl);
-  return new Promise((resolve, reject) =>
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("Could not encode receipt"))),
-      "image/jpeg",
-      QUALITY,
-    ),
-  );
+async function receiptsApi(method: string, init: { path?: string; body?: unknown } = {}) {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error("Please sign in again.");
+  const query = init.path ? `?path=${encodeURIComponent(init.path)}` : "";
+  const res = await fetch(`/api/receipts${query}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    ...(init.body !== undefined && { body: JSON.stringify(init.body) }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    path?: string;
+    url?: string;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error || `Receipt request failed (${res.status})`);
+  return data;
 }
 
-/** Saves a receipt photo and returns its Storage path (to store on the expense). */
-export async function uploadReceipt(userId: string, dataUrl: string): Promise<string> {
-  const path = `receipts/${userId}/${crypto.randomUUID()}.jpg`;
-  await uploadBytes(ref(storage, path), await compress(dataUrl), { contentType: "image/jpeg" });
+/** Saves a receipt photo (DigitalOcean Spaces, via /api/receipts) and returns its path. */
+export async function uploadReceipt(dataUrl: string): Promise<string> {
+  const { path } = await receiptsApi("POST", { body: { dataUrl: await compressImage(dataUrl) } });
+  if (!path) throw new Error("Receipt upload failed");
   return path;
 }
 
-export function getReceiptUrl(path: string): Promise<string> {
-  return getDownloadURL(ref(storage, path));
+/** A short-lived link to view a saved receipt photo. */
+export async function getReceiptUrl(path: string): Promise<string> {
+  const { url } = await receiptsApi("GET", { path });
+  if (!url) throw new Error("Receipt link failed");
+  return url;
 }
 
-/** Best-effort delete; a missing file is not an error. */
+/** Best-effort delete; failures are logged, never thrown. */
 export async function deleteReceipt(path: string): Promise<void> {
   try {
-    await deleteObject(ref(storage, path));
+    await receiptsApi("DELETE", { path });
   } catch (error) {
-    if ((error as { code?: string }).code !== "storage/object-not-found") {
-      console.error("Failed to delete receipt:", error);
-    }
+    console.error("Failed to delete receipt:", error);
   }
 }

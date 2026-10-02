@@ -3,7 +3,8 @@
 // the OpenRouter key never reaches the browser (same pattern as the Android app's /scan).
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { DEFAULT_MODEL, OPENROUTER_URL, userIdFromRequest } from "@/lib/server/openrouter";
+import { userIdFromRequest } from "@/lib/server/auth";
+import { DEFAULT_MODEL, OPENROUTER_URL } from "@/lib/server/openrouter";
 
 export const runtime = "nodejs";
 

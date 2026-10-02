@@ -349,7 +349,7 @@ export default function ExpenseDialog({
     let receiptPath = expense?.receiptPath;
     if (receiptImages.length > 0 && user?.uid) {
       try {
-        receiptPath = await uploadReceipt(user.uid, receiptImages[0]);
+        receiptPath = await uploadReceipt(receiptImages[0]);
         // Replacing a receipt on edit: drop the old photo
         if (expense?.receiptPath) void deleteReceipt(expense.receiptPath);
       } catch (err) {

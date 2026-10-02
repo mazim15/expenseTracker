@@ -443,7 +443,7 @@ export default function ExpensesPage() {
         let receiptPath: string | undefined;
         if (scannedReceipts?.[0]) {
           try {
-            receiptPath = await uploadReceipt(user.uid, scannedReceipts[0]);
+            receiptPath = await uploadReceipt(scannedReceipts[0]);
           } catch (err) {
             console.error("Receipt upload failed:", err);
             receiptFailed = true;
