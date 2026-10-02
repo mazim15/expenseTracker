@@ -36,6 +36,17 @@ describe("parseEnrichResponse", () => {
     expect(parseEnrichResponse(text, ["a"])?.[0].merchant).toHaveLength(100);
   });
 
+  it("accepts a bare array or a different key", () => {
+    const bare = JSON.stringify([{ id: "a", merchant: "KFC", brand: "" }]);
+    const otherKey = JSON.stringify({ expenses: [{ id: "a", merchant: "KFC", brand: "" }] });
+    expect(parseEnrichResponse(bare, ["a"])).toEqual([{ id: "a", merchant: "KFC", brand: "" }]);
+    expect(parseEnrichResponse(otherKey, ["a"])).toEqual([{ id: "a", merchant: "KFC", brand: "" }]);
+  });
+
+  it("returns null for an empty reply (e.g. safety filter)", () => {
+    expect(parseEnrichResponse("", ["a"])).toBeNull();
+  });
+
   it("returns null for unreadable replies", () => {
     expect(parseEnrichResponse("sorry, I can't", ["a"])).toBeNull();
     expect(parseEnrichResponse('{"results": "nope"}', ["a"])).toBeNull();

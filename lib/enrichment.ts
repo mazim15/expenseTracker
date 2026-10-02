@@ -4,6 +4,15 @@ import { logError } from "@/lib/logging";
 import { recordAiUsage } from "@/lib/aiUsage";
 import { ENRICH_BATCH_SIZE, EnrichmentInput, EnrichmentResult } from "@/lib/utils/enrichment";
 
+class EnrichmentError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 async function requestEnrichment(
   expenses: EnrichmentInput[],
   knownMerchants: string[],
@@ -30,7 +39,9 @@ async function requestEnrichment(
     costUsd?: number | null;
     tokens?: number;
   };
-  if (!res.ok || !body.results) throw new Error(body.error || `Enrichment failed (${res.status})`);
+  if (!res.ok || !body.results) {
+    throw new EnrichmentError(body.error || `Enrichment failed (${res.status})`, res.status);
+  }
   void recordAiUsage({
     feature: "enrichment",
     model: body.model ?? null,
@@ -44,18 +55,38 @@ async function requestEnrichment(
 /**
  * Asks AI for each expense's merchant and brand and saves them with `enrichedAt`.
  * `knownMerchants` keeps spellings consistent with what the user already has.
- * Calls `onProgress` with the running count. Returns how many expenses were enriched.
+ * Calls `onProgress` with the running count of processed (done + skipped) expenses.
+ *
+ * When the model's answer for a batch is unreadable (502), the batch is split in half and
+ * retried down to single expenses, so one problem expense can't block the rest; expenses
+ * that still fail are skipped and left unprocessed. Other errors (auth, server config) throw.
  */
 export async function enrichExpenses(
   userId: string,
   expenses: EnrichmentInput[],
   knownMerchants: string[] = [],
-  onProgress?: (done: number) => void,
-): Promise<number> {
+  onProgress?: (processed: number) => void,
+): Promise<{ done: number; skipped: number }> {
   const known = new Set(knownMerchants);
   let done = 0;
-  for (let i = 0; i < expenses.length; i += ENRICH_BATCH_SIZE) {
-    const results = await requestEnrichment(expenses.slice(i, i + ENRICH_BATCH_SIZE), [...known]);
+  let skipped = 0;
+
+  const run = async (chunk: EnrichmentInput[]): Promise<void> => {
+    let results: EnrichmentResult[];
+    try {
+      results = await requestEnrichment(chunk, [...known]);
+    } catch (err) {
+      if (!(err instanceof EnrichmentError) || err.status !== 502) throw err;
+      if (chunk.length === 1) {
+        skipped += 1;
+        onProgress?.(done + skipped);
+        return;
+      }
+      const half = Math.ceil(chunk.length / 2);
+      await run(chunk.slice(0, half));
+      await run(chunk.slice(half));
+      return;
+    }
     const batch = writeBatch(db);
     const now = Timestamp.now();
     for (const r of results) {
@@ -68,9 +99,15 @@ export async function enrichExpenses(
     }
     await batch.commit();
     done += results.length;
-    onProgress?.(done);
+    // Ids the model left out of its answer stay unprocessed
+    skipped += chunk.length - results.length;
+    onProgress?.(done + skipped);
+  };
+
+  for (let i = 0; i < expenses.length; i += ENRICH_BATCH_SIZE) {
+    await run(expenses.slice(i, i + ENRICH_BATCH_SIZE));
   }
-  return done;
+  return { done, skipped };
 }
 
 /** Fire-and-forget enrichment after a save; failures are logged, never shown to the user. */

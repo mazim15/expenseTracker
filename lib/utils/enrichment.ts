@@ -47,21 +47,40 @@ function cleanName(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, MAX_NAME_LENGTH) : "";
 }
 
+function parseJson(text: string): unknown {
+  const unfenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/)?.[1] ?? text;
+  const candidates = [
+    unfenced,
+    unfenced.match(/\{[\s\S]*\}/)?.[0],
+    unfenced.match(/\[[\s\S]*\]/)?.[0],
+  ];
+  for (const c of candidates) {
+    if (!c) continue;
+    try {
+      return JSON.parse(c);
+    } catch {
+      // try the next candidate
+    }
+  }
+  return undefined;
+}
+
+/** The results array: `{ results: [...] }` as asked, or a bare array / another key holding one. */
+function findResults(data: unknown): unknown[] | null {
+  if (Array.isArray(data)) return data;
+  if (typeof data !== "object" || data === null) return null;
+  const obj = data as Record<string, unknown>;
+  if (Array.isArray(obj.results)) return obj.results;
+  return Object.values(obj).find(Array.isArray) ?? null;
+}
+
 /**
  * Parses the model's reply, keeping only results for ids we asked about (each once).
  * Returns null when the reply isn't usable JSON.
  */
 export function parseEnrichResponse(text: string, ids: string[]): EnrichmentResult[] | null {
-  const raw = text.match(/\{[\s\S]*\}/)?.[0];
-  if (!raw) return null;
-  let data: unknown;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  const results = (data as { results?: unknown })?.results;
-  if (!Array.isArray(results)) return null;
+  const results = findResults(parseJson(text));
+  if (!results) return null;
 
   const wanted = new Set(ids);
   const out: EnrichmentResult[] = [];

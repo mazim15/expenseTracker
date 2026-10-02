@@ -102,17 +102,26 @@ export default function AiUsagePage() {
   );
   const [backfill, setBackfill] = useState<{ done: number; total: number } | null>(null);
   const [backfillError, setBackfillError] = useState<string | null>(null);
+  const [backfillResult, setBackfillResult] = useState<string | null>(null);
 
   const runBackfill = async () => {
     if (!user || unenriched.length === 0) return;
     setBackfillError(null);
+    setBackfillResult(null);
     setBackfill({ done: 0, total: unenriched.length });
     const knownMerchants = [
       ...new Set((expensesQuery.data ?? []).map((e) => e.merchant).filter(Boolean)),
     ] as string[];
     try {
-      await enrichExpenses(user.uid, unenriched, knownMerchants, (done) =>
-        setBackfill({ done, total: unenriched.length }),
+      const { done, skipped } = await enrichExpenses(
+        user.uid,
+        unenriched,
+        knownMerchants,
+        (processed) => setBackfill({ done: processed, total: unenriched.length }),
+      );
+      setBackfillResult(
+        `${done} expense${done === 1 ? "" : "s"} processed` +
+          (skipped ? ` · ${skipped} skipped (the AI couldn't read them; try again later)` : ""),
       );
     } catch (err) {
       setBackfillError(err instanceof Error ? err.message : "Enrichment failed");
@@ -275,6 +284,7 @@ export default function AiUsagePage() {
               "Detect merchants"
             )}
           </Button>
+          {backfillResult && <p className="text-muted-foreground text-sm">{backfillResult}</p>}
           {backfillError && <p className="text-destructive text-sm">{backfillError}</p>}
         </CardContent>
       </Card>

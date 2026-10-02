@@ -71,15 +71,28 @@ export async function POST(req: Request) {
   const out = (await res.json()) as {
     model?: string;
     usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
-    choices?: { message?: { content?: string } }[];
+    choices?: { finish_reason?: string; message?: { content?: string | null } }[];
   };
   console.info("enrich-expenses", { userId, count: expenses.length, usage: out.usage });
 
+  const choice = out.choices?.[0];
+  const text = choice?.message?.content ?? "";
   const results = parseEnrichResponse(
-    out.choices?.[0]?.message?.content ?? "",
+    text,
     expenses.map((e) => e.id),
   );
-  if (!results) return error(502, "Enrichment returned an unreadable answer.");
+  if (!results) {
+    // e.g. an empty reply from the provider's safety filter, or a truncated answer
+    console.error("enrich-expenses: unreadable reply", {
+      userId,
+      finishReason: choice?.finish_reason ?? null,
+      text: text.slice(0, 500),
+    });
+    return error(
+      502,
+      `Enrichment returned an unreadable answer (${choice?.finish_reason ?? "no reply"}).`,
+    );
+  }
   return NextResponse.json({
     results,
     model: out.model ?? null,
