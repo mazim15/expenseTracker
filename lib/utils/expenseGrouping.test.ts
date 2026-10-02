@@ -11,6 +11,8 @@ function makeExpense(partial: Partial<ExpenseType>): ExpenseType {
     category: partial.category ?? "food",
     description: partial.description ?? "",
     location: partial.location,
+    merchant: partial.merchant,
+    brand: partial.brand,
     tags: partial.tags ?? [],
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -18,6 +20,22 @@ function makeExpense(partial: Partial<ExpenseType>): ExpenseType {
 }
 
 describe("getExpenseGroup", () => {
+  it("prefers the saved merchant over the location text", () => {
+    const g = getExpenseGroup(makeExpense({ merchant: "KFC", location: "Nazimabad Branch" }));
+    expect(g).toEqual({ key: "loc:kfc", label: "KFC" });
+  });
+
+  it("links a manual expense to a scanned one from the same merchant", () => {
+    const scanned = getExpenseGroup(makeExpense({ merchant: "Imtiaz", description: "Receipt" }));
+    const manual = getExpenseGroup(makeExpense({ location: "Imtiaz, Gulshan" }));
+    expect(scanned?.key).toBe(manual?.key);
+  });
+
+  it("uses the saved brand when there is no merchant", () => {
+    const g = getExpenseGroup(makeExpense({ brand: "Tifal", description: "3 wipes xxl" }));
+    expect(g).toEqual({ key: "food:tifal", label: "Tifal" });
+  });
+
   it("groups by location when a merchant/place is present", () => {
     const g = getExpenseGroup(makeExpense({ location: "KFC", description: "1 zinger 1 broast" }));
     expect(g).toEqual({ key: "loc:kfc", label: "KFC" });

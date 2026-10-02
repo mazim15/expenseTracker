@@ -134,6 +134,14 @@ export default function ExpenseDialog({
     };
   }, [expense, expensesQuery.data]);
 
+  // Other expenses saved from the same receipt scan
+  const sameReceipt = useMemo(() => {
+    if (!expense?.receiptId) return [];
+    return (expensesQuery.data ?? []).filter(
+      (e) => e.receiptId === expense.receiptId && e.id !== expense.id,
+    );
+  }, [expense, expensesQuery.data]);
+
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
   const [localCategories, setLocalCategories] = useState(EXPENSE_CATEGORIES);
@@ -694,6 +702,86 @@ export default function ExpenseDialog({
                   </div>
                 )}
               </div>
+
+              {expense && (expense.merchant || expense.brand || expense.items?.length) ? (
+                <div className="bg-muted/50 space-y-2 rounded-2xl p-3">
+                  <div className="flex flex-wrap gap-1.5 text-xs">
+                    {expense.merchant && (
+                      <span className="bg-background rounded-full border px-2 py-0.5">
+                        Merchant: <span className="font-medium">{expense.merchant}</span>
+                      </span>
+                    )}
+                    {expense.brand && (
+                      <span className="bg-background rounded-full border px-2 py-0.5">
+                        Brand: <span className="font-medium">{expense.brand}</span>
+                      </span>
+                    )}
+                  </div>
+                  {!!expense.items?.length && (
+                    <>
+                      <ul className="space-y-1">
+                        {expense.items.map((item, i) => (
+                          <li
+                            key={i}
+                            className="text-muted-foreground flex items-baseline justify-between gap-2 text-xs"
+                          >
+                            <span className="truncate">
+                              {item.quantity > 1 ? `${item.quantity} × ` : ""}
+                              {item.name}
+                            </span>
+                            <span className="tabular-nums">{formatCurrency(item.price)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {expense.receiptTotals && (
+                        <div className="text-muted-foreground space-y-0.5 border-t pt-1.5 text-xs">
+                          {expense.receiptTotals.subtotal > 0 && (
+                            <p className="flex justify-between">
+                              <span>Subtotal</span>
+                              <span className="tabular-nums">
+                                {formatCurrency(expense.receiptTotals.subtotal)}
+                              </span>
+                            </p>
+                          )}
+                          {expense.receiptTotals.discount > 0 && (
+                            <p className="flex justify-between">
+                              <span>Discount</span>
+                              <span className="tabular-nums">
+                                −{formatCurrency(expense.receiptTotals.discount)}
+                              </span>
+                            </p>
+                          )}
+                          {expense.receiptTotals.fees > 0 && (
+                            <p className="flex justify-between">
+                              <span>Tax &amp; fees</span>
+                              <span className="tabular-nums">
+                                {formatCurrency(expense.receiptTotals.fees)}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : null}
+
+              {sameReceipt.length > 0 && (
+                <div className="bg-muted/50 rounded-2xl p-3">
+                  <p className="text-xs font-medium">From the same receipt</p>
+                  <ul className="mt-2 space-y-1">
+                    {sameReceipt.map((e) => (
+                      <li
+                        key={e.id}
+                        className="text-muted-foreground flex items-baseline justify-between gap-2 text-xs"
+                      >
+                        <span className="truncate">{e.description}</span>
+                        <span className="tabular-nums">{formatCurrency(e.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {purchaseHistory && (
                 <div className="bg-muted/50 rounded-2xl p-3">

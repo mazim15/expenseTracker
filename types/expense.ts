@@ -13,6 +13,20 @@ export function isPaymentMethod(value: unknown): value is PaymentMethod {
   return PAYMENT_METHODS.some((m) => m.value === value);
 }
 
+/** One line item read from a scanned receipt. */
+export interface ReceiptItem {
+  name: string;
+  quantity: number;
+  price: number;
+  category?: string;
+}
+
+export interface ReceiptTotals {
+  subtotal: number;
+  discount: number;
+  fees: number;
+}
+
 export interface ExpenseType {
   id: string;
   userId: string;
@@ -27,6 +41,17 @@ export interface ExpenseType {
   recurringId?: string;
   /** Firebase Storage path of the saved receipt photo. */
   receiptPath?: string;
+  /** Normalized store/merchant name (from a scan or AI enrichment), e.g. "KFC". */
+  merchant?: string;
+  /** Main product brand (from AI enrichment), e.g. "Tifal". */
+  brand?: string;
+  /** Line items, when the expense came from a scanned receipt. */
+  items?: ReceiptItem[];
+  receiptTotals?: ReceiptTotals;
+  /** Shared by every expense saved from the same receipt scan. */
+  receiptId?: string;
+  /** When merchant/brand were filled by AI; unset means not enriched yet. */
+  enrichedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -1,6 +1,7 @@
-import { ExpenseType, ExpenseCategory, EXPENSE_CATEGORIES } from "@/types/expense";
+import { ExpenseType, ExpenseCategory, EXPENSE_CATEGORIES, ReceiptItem } from "@/types/expense";
 import { auth } from "@/lib/firebase";
 import { compressImage } from "@/lib/receipts";
+import { recordAiUsage } from "@/lib/aiUsage";
 
 interface ExtractedReceiptData {
   merchant?: string;
@@ -132,6 +133,27 @@ function mostCommonCategory(items: ExtractedReceiptItem[]): ExpenseCategory {
   return winner;
 }
 
+/** Line items worth saving: named, with a usable price. Capped to fit the Firestore rule. */
+function toReceiptItems(items: ExtractedReceiptItem[]): ReceiptItem[] {
+  return items
+    .flatMap((item) => {
+      const name = typeof item.name === "string" ? item.name.trim().slice(0, 200) : "";
+      const price = toNumber(item.price);
+      if (!name || !Number.isFinite(price)) return [];
+      const quantity =
+        typeof item.quantity === "number" && item.quantity > 0 ? Math.round(item.quantity) : 1;
+      return [
+        {
+          name,
+          price,
+          quantity,
+          ...(typeof item.category === "string" && item.category && { category: item.category }),
+        },
+      ];
+    })
+    .slice(0, 100);
+}
+
 function formatMoney(value: number): string {
   if (!Number.isFinite(value)) return "";
   return value.toFixed(2);
@@ -236,11 +258,13 @@ export async function analyzeReceipt(
   if (!response.ok) {
     throw new Error(result.error || `Receipt analysis failed (${response.status})`);
   }
-  options.onUsage?.({
+  const usage: ScanUsage = {
     model: result.model ?? null,
     costUsd: result.costUsd ?? null,
     tokens: result.tokens ?? 0,
-  });
+  };
+  options.onUsage?.(usage);
+  void recordAiUsage({ feature: "receipt_scan", ...usage, count: images.length });
 
   const finishReason = result.finishReason ?? undefined;
   const textContent = result.text;
@@ -297,6 +321,8 @@ export async function analyzeReceipt(
   const date = clampDate(parsedDate);
 
   const location = typeof extractedData.location === "string" ? extractedData.location.trim() : "";
+  const merchant =
+    typeof extractedData.merchant === "string" ? extractedData.merchant.trim().slice(0, 100) : "";
 
   const normalizedKnown = new Map<string, string>();
   for (const t of options.knownTags ?? []) {
@@ -321,6 +347,15 @@ export async function analyzeReceipt(
     category: mostCommonCategory(items),
     location,
     tags,
+    ...(merchant && { merchant }),
+    items: toReceiptItems(items),
+    receiptTotals: {
+      subtotal: Math.max(0, toNumber(extractedData.subtotal) || 0),
+      discount,
+      fees,
+    },
+    // The vision model already read the merchant, so this expense needs no extra enrichment
+    enrichedAt: new Date(),
   };
 }
 

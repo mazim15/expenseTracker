@@ -19,6 +19,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { deleteReceipt } from "@/lib/receipts";
+import { enrichInBackground } from "@/lib/enrichment";
 import { ExpenseType } from "@/types/expense";
 import { transformFirebaseExpense } from "@/lib/utils/typeGuards";
 import { logError, logUserActionWithUserId } from "@/lib/logging";
@@ -143,6 +144,11 @@ export async function addExpense(
 
     await logUserActionWithUserId(userId, "expense_created", logDetails);
 
+    // Scanned expenses arrive already enriched; the rest get merchant/brand from AI afterwards
+    if (!expense.enrichedAt) {
+      enrichInBackground(userId, [{ id: docRef.id, ...expense }]);
+    }
+
     return docRef.id;
   } catch (error) {
     await logError(error as Error, "addExpense", {
@@ -164,6 +170,16 @@ export async function updateExpense(
 ): Promise<void> {
   try {
     const expenseDoc = doc(db, "users", userId, "expenses", expenseId);
+
+    // Merchant/brand come from the description and location, so redo them when those change
+    const before =
+      expenseData.description !== undefined || expenseData.location !== undefined
+        ? (await getDoc(expenseDoc)).data()
+        : undefined;
+    const textChanged =
+      !!before &&
+      ((expenseData.description !== undefined && expenseData.description !== before.description) ||
+        (expenseData.location !== undefined && expenseData.location !== (before.location ?? "")));
 
     // Create a properly typed update object
     const updateData: Record<string, unknown> = {
@@ -203,6 +219,17 @@ export async function updateExpense(
       logDetails.location = expenseData.location;
 
     await logUserActionWithUserId(userId, "expense_updated", logDetails);
+
+    if (before && textChanged) {
+      enrichInBackground(userId, [
+        {
+          id: expenseId,
+          description: expenseData.description ?? before.description,
+          location: expenseData.location ?? before.location,
+          category: expenseData.category ?? before.category,
+        },
+      ]);
+    }
   } catch (error) {
     await logError(error as Error, "updateExpense", {
       userId,
@@ -276,6 +303,7 @@ export async function importExpenses(
 ): Promise<number> {
   const userExpensesCollection = collection(db, "users", userId, "expenses");
   const now = Timestamp.now();
+  const saved: { id: string; description: string; location?: string; category: string }[] = [];
   for (let i = 0; i < items.length; i += 400) {
     const batch = writeBatch(db);
     for (const item of items.slice(i, i + 400)) {
@@ -286,10 +314,13 @@ export async function importExpenses(
         updatedAt: now,
       };
       Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
-      batch.set(doc(userExpensesCollection), data);
+      const ref = doc(userExpensesCollection);
+      batch.set(ref, data);
+      saved.push({ id: ref.id, ...item });
     }
     await batch.commit();
   }
   await logUserActionWithUserId(userId, "expenses_imported", { count: items.length });
+  enrichInBackground(userId, saved);
   return items.length;
 }

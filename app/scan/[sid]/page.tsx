@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { use } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, CheckCircle2, Loader2, AlertCircle, RotateCcw, ImageIcon } from "lucide-react";
+import { Camera, CheckCircle2, Loader2, AlertCircle, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { compressImageForSession, submitImageToSession } from "@/lib/scanHandoff";
 
@@ -13,21 +13,24 @@ export default function PhoneScanPage({ params }: { params: Promise<{ sid: strin
   const { sid } = use(params);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = useCallback(
-    async (file: File | undefined | null) => {
-      if (!file) return;
+  const handleFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files || files.length === 0) return;
       setError(null);
       try {
-        setStatus("compressing");
-        const { dataUrl, mimeType } = await compressImageForSession(file);
-        setPreview(dataUrl);
+        // One at a time: each photo is its own upload, so a failure keeps the ones already sent
+        for (const file of Array.from(files)) {
+          setStatus("compressing");
+          const { dataUrl, mimeType } = await compressImageForSession(file);
 
-        setStatus("sending");
-        await submitImageToSession(sid, dataUrl, mimeType);
+          setStatus("sending");
+          await submitImageToSession(sid, dataUrl, mimeType);
+          setPreviews((prev) => [...prev, dataUrl]);
+        }
         setStatus("sent");
       } catch (err) {
         setStatus("error");
@@ -45,14 +48,6 @@ export default function PhoneScanPage({ params }: { params: Promise<{ sid: strin
     [sid],
   );
 
-  const reset = () => {
-    setStatus("idle");
-    setError(null);
-    setPreview(null);
-    if (cameraInputRef.current) cameraInputRef.current.value = "";
-    if (libraryInputRef.current) libraryInputRef.current.value = "";
-  };
-
   const busy = status === "compressing" || status === "sending";
 
   return (
@@ -61,97 +56,106 @@ export default function PhoneScanPage({ params }: { params: Promise<{ sid: strin
         <div className="text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Scan receipt</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Take a photo of your receipt. It will appear on the device that showed you the QR code.
+            Take or pick one or more photos of your receipt. They will appear on the device that
+            showed you the QR code.
           </p>
         </div>
 
-        {preview && (
-          <div className="bg-muted overflow-hidden rounded-lg border">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={preview}
-              alt="Receipt preview"
-              className="max-h-[320px] w-full object-contain"
-            />
+        {previews.length > 0 && (
+          <div className="grid grid-cols-3 gap-2">
+            {previews.map((src, index) => (
+              <div key={index} className="bg-muted overflow-hidden rounded-lg border">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt={`Receipt photo ${index + 1}`}
+                  className="h-28 w-full object-cover"
+                />
+              </div>
+            ))}
           </div>
         )}
 
-        {status === "sent" ? (
-          <div className="flex flex-col items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-6 text-center">
-            <CheckCircle2 className="h-10 w-10 text-emerald-600" />
-            <div>
-              <p className="text-base font-semibold">Sent</p>
-              <p className="text-muted-foreground mt-1 text-sm">
-                You can close this tab. Review the photo on the other device.
-              </p>
-            </div>
-            <Button variant="outline" size="sm" onClick={reset}>
-              <RotateCcw className="h-4 w-4" />
-              Send another
+        {status === "sent" && (
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 text-center">
+            <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+            <p className="text-base font-semibold">
+              {previews.length} photo{previews.length === 1 ? "" : "s"} sent
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Long receipt? Add more photos below, or close this tab and review them on the other
+              device.
+            </p>
+          </div>
+        )}
+
+        <>
+          <div className="space-y-2">
+            <Button
+              type="button"
+              size="lg"
+              className="h-14 w-full text-base"
+              onClick={() => cameraInputRef.current?.click()}
+              disabled={busy}
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {status === "compressing" ? "Processing…" : "Sending…"}
+                </>
+              ) : (
+                <>
+                  <Camera className="h-5 w-5" />
+                  {previews.length > 0 ? "Take another photo" : "Take photo"}
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="h-12 w-full text-sm"
+              onClick={() => libraryInputRef.current?.click()}
+              disabled={busy}
+            >
+              <ImageIcon className="h-5 w-5" />
+              Choose from library (multiple)
             </Button>
           </div>
-        ) : (
-          <>
-            <div className="space-y-2">
-              <Button
-                type="button"
-                size="lg"
-                className="h-14 w-full text-base"
-                onClick={() => cameraInputRef.current?.click()}
-                disabled={busy}
-              >
-                {busy ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    {status === "compressing" ? "Processing…" : "Sending…"}
-                  </>
-                ) : (
-                  <>
-                    <Camera className="h-5 w-5" />
-                    Take photo
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="h-12 w-full text-sm"
-                onClick={() => libraryInputRef.current?.click()}
-                disabled={busy}
-              >
-                <ImageIcon className="h-5 w-5" />
-                Choose from library
-              </Button>
-            </div>
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => handleFile(e.target.files?.[0])}
-            />
-            <input
-              ref={libraryInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handleFile(e.target.files?.[0])}
-            />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={libraryInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
 
-            {error && (
-              <div
-                className={cn(
-                  "border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm",
-                )}
-              >
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-          </>
-        )}
+          {error && (
+            <div
+              className={cn(
+                "border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm",
+              )}
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+        </>
       </div>
     </main>
   );

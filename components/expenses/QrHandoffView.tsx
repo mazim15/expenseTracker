@@ -50,7 +50,7 @@ export default function QrHandoffView({ url, expiresAt, onBack }: QrHandoffViewP
       <div className="text-center">
         <p className="text-sm font-medium">Scan with your phone camera</p>
         <p className="text-muted-foreground mt-1 text-xs">
-          Open this link on your phone, take the photo, and it will appear here.
+          Open this link on your phone and take or pick one or more photos — they will appear here.
         </p>
       </div>
 

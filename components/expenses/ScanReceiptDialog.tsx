@@ -13,7 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Upload, Camera, Smartphone, X, ImageIcon, AlertCircle, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { createScanSession, deleteScanSession, subscribeToScanSession } from "@/lib/scanHandoff";
+import {
+  createScanSession,
+  deleteScanImage,
+  deleteScanSession,
+  subscribeToScanImages,
+} from "@/lib/scanHandoff";
 import QrHandoffView from "./QrHandoffView";
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
@@ -143,31 +148,29 @@ export default function ScanReceiptDialog({
     [images.length],
   );
 
+  // Stays subscribed after the first photo so the phone can keep sending more; the session
+  // is deleted when the dialog closes or the user goes back.
   useEffect(() => {
     if (!qrSessionId) return;
-    const unsubscribe = subscribeToScanSession(
+    const unsubscribe = subscribeToScanImages(
       qrSessionId,
-      async (data) => {
-        if (!data) return;
-        if (data.status === "received" && data.imageData) {
-          const dataUrl = data.imageData;
-          const mime = data.mimeType || "image/jpeg";
-          setImages((prev) => [
-            ...prev,
-            {
-              dataUrl,
-              mimeType: mime,
-              name: "receipt-from-phone.jpg",
-              size: Math.round((dataUrl.length * 3) / 4),
-            },
-          ]);
-          setMode("preview");
-          setError(null);
-          await deleteScanSession(qrSessionId);
-          setQrSessionId(null);
-          setQrUrl(null);
-          setQrExpiresAt(null);
-        }
+      (image) => {
+        setImages((prev) =>
+          prev.length >= MAX_IMAGES
+            ? prev
+            : [
+                ...prev,
+                {
+                  dataUrl: image.imageData,
+                  mimeType: image.mimeType,
+                  name: "receipt-from-phone.jpg",
+                  size: Math.round((image.imageData.length * 3) / 4),
+                },
+              ],
+        );
+        setMode("preview");
+        setError(null);
+        deleteScanImage(qrSessionId, image.id);
       },
       (err) => {
         setError(err.message);
@@ -351,6 +354,13 @@ export default function ScanReceiptDialog({
                 </div>
               ))}
             </div>
+
+            {qrSessionId && (
+              <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                <Smartphone className="h-3.5 w-3.5" />
+                Phone connected — photos you send from it will keep appearing here.
+              </p>
+            )}
 
             <div className="text-muted-foreground flex items-center justify-between text-xs">
               <span>

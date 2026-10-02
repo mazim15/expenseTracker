@@ -435,6 +435,8 @@ export default function ExpensesPage() {
       toast.loading(`Adding ${expensesIn.length} expenses...`);
       // Keep the receipt photo: one copy per expense, so deleting one never removes another's
       let receiptFailed = false;
+      // Links every expense saved from this scan to the same receipt
+      const receiptId = crypto.randomUUID();
       for (const data of expensesIn) {
         let receiptPath: string | undefined;
         if (scannedReceipts?.[0]) {
@@ -449,6 +451,7 @@ export default function ExpensesPage() {
           {
             ...data,
             ...(receiptPath && { receiptPath }),
+            receiptId,
             userId: user.uid,
             date: data.date || new Date(),
             amount: data.amount || 0,

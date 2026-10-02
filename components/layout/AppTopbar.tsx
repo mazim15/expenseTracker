@@ -18,6 +18,7 @@ const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
   expenses: "Expenses",
   analytics: "Analytics",
+  "ai-usage": "AI usage",
   settings: "Settings",
   categories: "Categories",
   logs: "Logs",

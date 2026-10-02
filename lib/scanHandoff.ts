@@ -1,11 +1,12 @@
 import {
+  addDoc,
+  collection,
   deleteDoc,
   doc,
   onSnapshot,
   serverTimestamp,
   setDoc,
   Timestamp,
-  updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -13,15 +14,11 @@ export const SESSION_TTL_MS = 5 * 60 * 1000;
 export const MAX_IMAGE_BYTES = 850_000;
 const MAX_IMAGE_EDGE = 1400;
 
-export type ScanSessionStatus = "waiting" | "received";
-
-export type ScanSessionDoc = {
-  createdBy: string;
-  createdAt?: Timestamp;
-  expiresAt: Timestamp;
-  status: ScanSessionStatus;
-  imageData?: string;
-  mimeType?: string;
+/** A photo the phone sent; each one is its own doc under the session, so a session can carry several. */
+export type ScanSessionImage = {
+  id: string;
+  imageData: string;
+  mimeType: string;
 };
 
 function generateSessionId(): string {
@@ -41,7 +38,7 @@ export async function createScanSession(userId: string): Promise<{
     createdBy: userId,
     createdAt: serverTimestamp(),
     expiresAt: Timestamp.fromDate(expiresAt),
-    status: "waiting" as ScanSessionStatus,
+    status: "waiting",
   });
   return { sessionId, expiresAt };
 }
@@ -54,18 +51,40 @@ export async function deleteScanSession(sessionId: string): Promise<void> {
   }
 }
 
-export function subscribeToScanSession(
+function imagesCollection(sessionId: string) {
+  return collection(db, "scan-sessions", sessionId, "images");
+}
+
+/** Calls `onImage` once for every photo the phone adds to the session. */
+export function subscribeToScanImages(
   sessionId: string,
-  onUpdate: (data: ScanSessionDoc | null) => void,
+  onImage: (image: ScanSessionImage) => void,
   onError?: (err: Error) => void,
 ): () => void {
   return onSnapshot(
-    doc(db, "scan-sessions", sessionId),
+    imagesCollection(sessionId),
     (snap) => {
-      onUpdate(snap.exists() ? (snap.data() as ScanSessionDoc) : null);
+      for (const change of snap.docChanges()) {
+        if (change.type !== "added") continue;
+        const data = change.doc.data();
+        if (typeof data.imageData !== "string") continue;
+        onImage({
+          id: change.doc.id,
+          imageData: data.imageData,
+          mimeType: typeof data.mimeType === "string" ? data.mimeType : "image/jpeg",
+        });
+      }
     },
     (err) => onError?.(err),
   );
+}
+
+export async function deleteScanImage(sessionId: string, imageId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, "scan-sessions", sessionId, "images", imageId));
+  } catch {
+    // Best-effort cleanup
+  }
 }
 
 export async function submitImageToSession(
@@ -73,10 +92,10 @@ export async function submitImageToSession(
   imageData: string,
   mimeType: string,
 ): Promise<void> {
-  await updateDoc(doc(db, "scan-sessions", sessionId), {
+  await addDoc(imagesCollection(sessionId), {
     imageData,
     mimeType,
-    status: "received" as ScanSessionStatus,
+    createdAt: serverTimestamp(),
   });
 }
 

@@ -36,19 +36,21 @@ export function getLocationArea(location?: string): string | null {
 
 /**
  * Groups an expense by its merchant when present, otherwise by
- * `category` + the brand word extracted from its `description`.
- * Locations are saved as "Merchant, Area" (e.g. "KFC, Nazimabad"), so the
- * merchant name (before the first comma) is used — the same merchant across
- * different areas shares one group. Returns null when neither yields a key.
+ * `category` + its brand.
+ * The saved `merchant` (from a receipt scan or AI enrichment) wins. Without it,
+ * locations saved as "Merchant, Area" (e.g. "KFC, Nazimabad") give the merchant
+ * name (before the first comma) — the same merchant across different areas
+ * shares one group. The brand is the saved `brand`, else the brand word
+ * extracted from the `description`. Returns null when nothing yields a key.
  */
 export function getExpenseGroup(
-  e: Pick<ExpenseType, "location" | "category" | "description">,
+  e: Pick<ExpenseType, "location" | "category" | "description" | "merchant" | "brand">,
 ): ExpenseGroup | null {
-  const merchant = e.location?.split(",")[0].trim();
+  const merchant = e.merchant?.trim() || e.location?.split(",")[0].trim();
   if (merchant) {
     return { key: `loc:${merchant.toLowerCase()}`, label: merchant };
   }
-  const brand = firstBrandWord(e.description);
+  const brand = e.brand?.trim() || firstBrandWord(e.description);
   if (!brand) return null;
   return { key: `${e.category}:${brand.toLowerCase()}`, label: brand };
 }

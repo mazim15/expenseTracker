@@ -1,4 +1,10 @@
-import { ExpenseType, ExpenseCategory, isPaymentMethod } from "@/types/expense";
+import {
+  ExpenseType,
+  ExpenseCategory,
+  ReceiptItem,
+  ReceiptTotals,
+  isPaymentMethod,
+} from "@/types/expense";
 
 // Type guard for ExpenseType
 export function isExpenseType(obj: unknown): obj is ExpenseType {
@@ -27,6 +33,39 @@ export function isExpenseType(obj: unknown): obj is ExpenseType {
 // non-empty string is a valid category — not just the built-in defaults.
 export function isExpenseCategory(value: string): value is ExpenseCategory {
   return value.trim().length > 0;
+}
+
+function isTimestamp(value: unknown): value is { toDate: () => Date } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof (value as { toDate: unknown }).toDate === "function"
+  );
+}
+
+function parseReceiptItems(raw: unknown[]): ReceiptItem[] {
+  return raw.flatMap((item) => {
+    if (typeof item !== "object" || item === null) return [];
+    const i = item as Record<string, unknown>;
+    if (typeof i.name !== "string" || typeof i.price !== "number") return [];
+    return [
+      {
+        name: i.name,
+        price: i.price,
+        quantity: typeof i.quantity === "number" ? i.quantity : 1,
+        ...(typeof i.category === "string" && { category: i.category }),
+      },
+    ];
+  });
+}
+
+function isReceiptTotals(value: unknown): value is ReceiptTotals {
+  if (typeof value !== "object" || value === null) return false;
+  const t = value as Record<string, unknown>;
+  return (
+    typeof t.subtotal === "number" && typeof t.discount === "number" && typeof t.fees === "number"
+  );
 }
 
 // Safe expense transformer for Firebase data
@@ -62,6 +101,12 @@ export function transformFirebaseExpense(
       ...(isPaymentMethod(data.paymentMethod) && { paymentMethod: data.paymentMethod }),
       ...(typeof data.recurringId === "string" && { recurringId: data.recurringId }),
       ...(typeof data.receiptPath === "string" && { receiptPath: data.receiptPath }),
+      ...(typeof data.merchant === "string" && data.merchant && { merchant: data.merchant }),
+      ...(typeof data.brand === "string" && data.brand && { brand: data.brand }),
+      ...(Array.isArray(data.items) && { items: parseReceiptItems(data.items) }),
+      ...(isReceiptTotals(data.receiptTotals) && { receiptTotals: data.receiptTotals }),
+      ...(typeof data.receiptId === "string" && { receiptId: data.receiptId }),
+      ...(isTimestamp(data.enrichedAt) && { enrichedAt: data.enrichedAt.toDate() }),
       createdAt:
         data.createdAt &&
         typeof data.createdAt === "object" &&

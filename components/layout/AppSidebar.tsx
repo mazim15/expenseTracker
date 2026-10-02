@@ -20,6 +20,7 @@ import {
   Receipt,
   CalendarDays,
   BarChart3,
+  Bot,
   Activity,
   Settings,
   LogOut,
@@ -46,6 +47,7 @@ const mainNav: NavItem[] = [
   { name: "Expenses", href: "/expenses", icon: Receipt },
   { name: "Calendar", href: "/calendar", icon: CalendarDays },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
+  { name: "AI usage", href: "/ai-usage", icon: Bot },
 ];
 
 const adminNav: NavItem[] = [

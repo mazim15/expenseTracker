@@ -39,7 +39,13 @@ service cloud.firestore {
               && (!('tags' in data) || (data.tags is list && data.tags.size() <= 10))
               && (!('paymentMethod' in data) || data.paymentMethod in ['cash', 'card', 'bank', 'wallet'])
               && (!('recurringId' in data) || (data.recurringId is string && data.recurringId.size() <= 100))
-              && (!('receiptPath' in data) || (data.receiptPath is string && data.receiptPath.size() <= 300));
+              && (!('receiptPath' in data) || (data.receiptPath is string && data.receiptPath.size() <= 300))
+              && (!('merchant' in data) || (data.merchant is string && data.merchant.size() <= 100))
+              && (!('brand' in data) || (data.brand is string && data.brand.size() <= 100))
+              && (!('items' in data) || (data.items is list && data.items.size() <= 100))
+              && (!('receiptTotals' in data) || data.receiptTotals is map)
+              && (!('receiptId' in data) || (data.receiptId is string && data.receiptId.size() <= 100))
+              && (!('enrichedAt' in data) || data.enrichedAt is timestamp);
         }
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) && validExpense(request.resource.data);
@@ -70,6 +76,22 @@ service cloud.firestore {
       }
 
       // Settings subcollection - added for categories
+      // One record per AI call (receipt scan, merchant detection) for the AI usage page.
+      // Written by the user's own client after each call; append-only.
+      match /aiUsage/{entryId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId)
+                      && request.resource.data.feature in ['receipt_scan', 'enrichment']
+                      && request.resource.data.model is string
+                      && request.resource.data.model.size() <= 100
+                      && request.resource.data.costUsd is number
+                      && request.resource.data.costUsd >= 0
+                      && request.resource.data.costUsd < 10
+                      && request.resource.data.tokens is int
+                      && request.resource.data.count is int
+                      && request.resource.data.createdAt is timestamp;
+      }
+
       match /settings/{settingId} {
         allow read, write: if isOwner(userId);
       }
@@ -126,15 +148,20 @@ service cloud.firestore {
                     && request.resource.data.expiresAt > request.time
                     && request.resource.data.expiresAt < request.time + duration.value(10, 'm');
 
-      // Phone uploads image ONCE — allowed without auth but constrained
-      allow update: if resource.data.status == "waiting"
-                    && resource.data.expiresAt > request.time
-                    && request.resource.data.status == "received"
-                    && request.resource.data.createdBy == resource.data.createdBy
-                    && request.resource.data.createdAt == resource.data.createdAt
-                    && request.resource.data.expiresAt == resource.data.expiresAt
-                    && request.resource.data.imageData is string
-                    && request.resource.data.imageData.size() < 900000;
+      // Phone sends any number of photos while the session is live, one doc each
+      // (a single doc can't hold several ~850KB images). Allowed without auth but constrained.
+      match /images/{imageId} {
+        function session() {
+          return get(/databases/$(database)/documents/scan-sessions/$(sid)).data;
+        }
+        allow create: if session().expiresAt > request.time
+                      && request.resource.data.keys().hasOnly(['imageData', 'mimeType', 'createdAt'])
+                      && request.resource.data.imageData is string
+                      && request.resource.data.imageData.size() < 900000
+                      && request.resource.data.mimeType is string
+                      && request.resource.data.mimeType.size() <= 50;
+        allow read, delete: if isSignedIn() && request.auth.uid == session().createdBy;
+      }
 
       // Creator can delete (cleanup on dialog close / success)
       allow delete: if isSignedIn()
