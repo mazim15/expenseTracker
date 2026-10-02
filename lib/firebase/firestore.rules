@@ -11,6 +11,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
     
+    // Admin access is granted via the `admin` custom claim (see scripts/set-admin.js)
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+    
     // User document rules
     match /users/{userId} {
       // Allow users to read and write only their own user document
@@ -66,16 +71,12 @@ service cloud.firestore {
     match /logs/{logId} {
       // Users can read their own logs OR admin users can read all logs
       allow read: if isSignedIn() && 
-        (request.auth.uid == resource.data.userId || 
-         request.auth.token.email == 'admin@example.com' || 
-         request.auth.token.email == 'admin@localhost');
+        (request.auth.uid == resource.data.userId || isAdmin());
       // Allow system to write logs
       allow create: if isSignedIn();
       // Prevent updates and deletes from clients (except for admin deletion)
       allow update: if false;
-      allow delete: if isSignedIn() && 
-        (request.auth.token.email == 'admin@example.com' || 
-         request.auth.token.email == 'admin@localhost');
+      allow delete: if isSignedIn() && isAdmin();
     }
     
     // Add any additional collections needed for your application

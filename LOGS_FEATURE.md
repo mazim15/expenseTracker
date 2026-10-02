@@ -105,7 +105,7 @@ Document Structure:
 allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
 
 // Admin users can read all logs
-allow read: if isSignedIn() && request.auth.token.email == 'admin@example.com';
+allow read: if isSignedIn() && request.auth.token.admin == true;
 
 // Only system can write logs
 allow create: if isSignedIn();

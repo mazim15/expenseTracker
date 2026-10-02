@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { LogEntry, LogFilter, LogLevel, LogCategory } from "@/lib/logging/types";
 import { FirestoreLogAdapter } from "@/lib/logging/storage";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { auth } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,8 +54,19 @@ export default function LogsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(50);
 
-  // Check if user has admin access
-  const isAdmin = user?.email === "admin@example.com" || user?.email === "admin@localhost";
+  // Check if user has admin access (the `admin` custom claim; see scripts/set-admin.js)
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user || !auth.currentUser) {
+      setIsAdmin(false);
+      return;
+    }
+    auth.currentUser
+      .getIdTokenResult()
+      .then((token) => setIsAdmin(token.claims.admin === true))
+      .catch(() => setIsAdmin(false));
+  }, [user]);
 
   const loadLogs = useCallback(async () => {
     try {
@@ -83,6 +95,7 @@ export default function LogsPage() {
   }, [filter, currentPage, selectedLevel, selectedCategory, searchTerm, pageSize]);
 
   useEffect(() => {
+    if (isAdmin === null) return;
     if (!isAdmin) {
       setError("Access denied. Admin privileges required.");
       setLoading(false);
@@ -155,6 +168,14 @@ export default function LogsPage() {
       second: "2-digit",
     }).format(timestamp);
   };
+
+  if (isAdmin === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return (
